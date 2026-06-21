@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horizon Chamber</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<link rel="shortcut icon" type="image/x-icon" href="/static/horizon_icon.ico">
+<style>
+/* ── Reset & Base ────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #e0e0e0;
+  background: #0a0a0f;
+}
+
+/* ── Canvas (behind everything) ──────────────────────── */
+#nebula {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+  display: block;
+}
+
+/* ── Glassmorphism overlay panels ────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 16px 20px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Top bar ─────────────────────────────────────────── */
+#top-bar {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(600px, 90vw);
+  z-index: 10;
+  text-align: center;
+}
+
+#top-bar h1 {
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin-bottom: 6px;
+}
+
+#main-quest {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  color: #e0e0e0;
+  font-size: 1.4rem;
+  font-weight: 300;
+  text-align: center;
+  padding: 8px 4px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+#main-quest:focus { border-bottom-color: rgba(255,255,255,0.5); }
+#main-quest::placeholder { color: rgba(255,255,255,0.2); }
+
+/* ── Bottom section ──────────────────────────────────── */
+#bottom-section {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(700px, 92vw);
+  z-index: 10;
+}
+
+#chaos-input-area {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+#chaos-textarea {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  font-family: inherit;
+  padding: 12px 14px;
+  resize: none;
+  outline: none;
+  min-height: 50px;
+  max-height: 120px;
+  transition: border-color 0.3s;
+}
+
+#chaos-textarea:focus { border-color: rgba(255,255,255,0.3); }
+#chaos-textarea::placeholder { color: rgba(255,255,255,0.25); }
+
+.btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  font-family: inherit;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s, opacity 0.25s;
+  white-space: nowrap;
+}
+
+.btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.25); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+#error-banner {
+  display: none;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(220, 50, 50, 0.2);
+  border: 1px solid rgba(220, 50, 50, 0.4);
+  border-radius: 10px;
+  color: #ff8a8a;
+  font-size: 0.85rem;
+}
+
+#loading-text {
+  display: none;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  text-align: center;
+}
+
+/* ── Cards container ─────────────────────────────────── */
+#cards-container {
+  display: none;
+  margin-top: 14px;
+  gap: 12px;
+  justify-content: center;
+}
+
+.card-column {
+  flex: 1;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 12px;
+  min-height: 60px;
+}
+
+.card-column h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.5;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.card-column.column-now    { background: rgba(255, 215, 0, 0.06); }
+.card-column.column-later  { background: rgba(74, 144, 226, 0.06); }
+.card-column.column-trash  { background: rgba(160, 160, 160, 0.06); }
+
+.chaos-card {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  cursor: grab;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.chaos-card:active { cursor: grabbing; transform: scale(0.97); }
+.chaos-card.dragging { opacity: 0.5; }
+
+.chaos-card.card-now   { border-left: 3px solid #FFD700; }
+.chaos-card.card-later { border-left: 3px solid #4A90E2; }
+.chaos-card.card-trash { border-left: 3px solid #888; }
+
+.card-column.drag-over {
+  background: rgba(255,255,255,0.1);
+  outline: 2px dashed rgba(255,255,255,0.2);
+  outline-offset: -2px;
+}
+
+/* ── Sunrise button (fixed bottom-right) ─────────────── */
+#sunrise-btn {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 20;
+  background: rgba(255, 215, 0, 0.12);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  color: #FFD700;
+  font-size: 0.85rem;
+  padding: 12px 18px;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: background 0.3s, box-shadow 0.3s;
+  font-family: inherit;
+}
+
+#sunrise-btn:hover {
+  background: rgba(255, 215, 0, 0.22);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.1);
+}
+
+#sunrise-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── Sunrise settings panel ──────────────────────────── */
+#sunrise-settings {
+  position: fixed;
+  bottom: 85px;
+  right: 30px;
+  z-index: 19;
+  min-width: 200px;
+  display: none;
+  font-size: 0.8rem;
+}
+
+#sunrise-settings.visible { display: block; }
+
+#sunrise-settings label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+#sunrise-settings input[type="time"] {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  font-family: inherit;
+  padding: 6px 10px;
+  outline: none;
+  width: 100%;
+}
+
+#sunrise-settings input[type="time"]:focus {
+  border-color: rgba(255, 215, 0, 0.4);
+}
+
+#sunrise-settings .time-label {
+  display: block;
+  margin-bottom: 4px;
+  opacity: 0.6;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+#sunrise-settings .settings-row {
+  margin-bottom: 10px;
+}
+
+#sunrise-settings .settings-note {
+  font-size: 0.7rem;
+  opacity: 0.4;
+  margin-top: 6px;
+  text-align: center;
+}
+
+/* Gear icon next to sunrise button */
+#sunrise-gear {
+  position: fixed;
+  bottom: 38px;
+  right: 140px;
+  z-index: 21;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.3s, transform 0.3s;
+  font-family: inherit;
+}
+
+#sunrise-gear:hover {
+  color: rgba(255,255,255,0.6);
+  transform: rotate(30deg);
+}
+
+#sunrise-gear.active {
+  color: #FFD700;
+  transform: rotate(60deg);
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  transition: background 0.3s;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 16px; width: 16px;
+  left: 2px; bottom: 2px;
+  background: #e0e0e0;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: rgba(255, 215, 0, 0.5);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+}
+
+/* ── Activity indicator (v0.2) ────────────────────────── */
+.activity-pill {
+  display: none;
+  font-size: 0.7rem;
+  opacity: 0.6;
+  margin-left: 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.activity-pill.visible { display: inline; }
+.activity-pill.idle { opacity: 0.4; }
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.3; }
+}
+.activity-pill.pulse {
+  animation: pulse-opacity 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-pill.pulse { animation: none; }
+}
+
+/* ── Focus panel bars (v0.2) ─────────────────────────── */
+.focus-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.focus-bar-label {
+  width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.focus-bar-track {
+  flex: 1;
+  height: 16px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.focus-bar-fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.5s ease;
+  min-width: 2px;
+}
+.focus-bar-fill.focus      { background: #FFD700; }
+.focus-bar-fill.distraction { background: #e05050; }
+.focus-bar-fill.neutral    { background: #888; }
+.focus-bar-fill.idle       { background: #557; }
+.focus-bar-fill.away       { background: #335; }
+.focus-bar-pct {
+  width: 40px;
+  text-align: right;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+#focus-panel { display: none; }
+#focus-panel.visible { display: block; }
+
+/* ── Today's Focus panel ─────────────────────────────── */
+#today-panel {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  z-index: 10;
+  min-width: 160px;
+  display: none;
+  font-size: 0.8rem;
+}
+
+#today-panel.visible { display: block; }
+
+#today-panel h3 {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.4;
+  margin-bottom: 6px;
+}
+
+#today-panel ul {
+  list-style: none;
+}
+
+#today-panel li {
+  padding: 4px 0;
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 600px) {
+  #cards-container { flex-direction: column; }
+  #bottom-section { bottom: 20px; width: 95vw; }
+  #sunrise-btn { bottom: 20px; right: 20px; font-size: 0.8rem; padding: 10px 14px; }
+  #top-bar { top: 12px; width: 95vw; }
+  #today-panel { display: none !important; }
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  #today-panel { min-width: 120px; right: 10px; }
+  .focus-bar-label { width: 40px; }
+  .focus-bar-pct { width: 30px; }
+}
+
+/* ── Reduced motion — respect OS preference ──────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  #nebula { display: none; }
+  .chaos-card { transition: none; }
+  #sunrise-btn { transition: none; }
+  .focus-bar-fill { transition: none; }
+}
+
+/* ── Sunrise active — darken glass / cards so text stays readable ── */
+body.sunrise-active .glass {
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+body.sunrise-active .chaos-card {
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+body.sunrise-active #today-panel {
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+</style>
+</head>
+<body>
+
+<!-- Canvas -->
+<canvas id="nebula"></canvas>
+
+<!-- Top bar: Main Quest -->
+<div id="top-bar" class="glass">
+  <h1>Horizon Chamber<span id="activity-indicator" class="activity-pill"></span></h1>
+  <input type="text" id="main-quest" placeholder="What is your main quest today?" autocomplete="off" spellcheck="false">
+</div>
+
+<!-- Today's Focus panel -->
+<div id="today-panel" class="glass">
+  <h2>Today's Focus</h2>
+  <ul id="today-list"></ul>
+  <div id="focus-panel">
+    <div id="focus-bars"></div>
+  </div>
+</div>
+
+<!-- Bottom section: Chaos Tamer -->
+<div id="bottom-section" class="glass">
+  <div id="chaos-input-area">
+    <textarea id="chaos-textarea" rows="2" placeholder="Paste your chaos here... (tabs, URLs, random thoughts)"></textarea>
+    <button class="btn" id="tame-btn">Tame the Chaos</button>
+  </div>
+  <div id="error-banner"></div>
+  <div id="loading-text">Classifying...</div>
+  <div id="cards-container"></div>
+</div>
+
+<!-- Sunrise button -->
+<button id="sunrise-btn">☀️ Start Sunrise</button>
+
+<!-- Sunrise settings -->
+<div id="sunrise-settings" class="glass">
+  <div class="settings-row">
+    <label>
+      <span class="toggle-switch">
+        <input type="checkbox" id="sunrise-toggle" aria-label="Enable auto sunrise">
+        <span class="toggle-slider"></span>
+      </span>
+      Auto Sunrise
+    </label>
+  </div>
+  <div class="settings-row">
+    <span class="time-label">Time</span>
+    <input type="time" id="sunrise-time" value="07:00" aria-label="Sunrise time">
+  </div>
+  <div class="settings-note">In-memory schedule • resets on restart</div>
+</div>
+
+<button id="sunrise-gear" aria-label="Sunrise settings">⚙️</button>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   GLOBALS
+   ═══════════════════════════════════════════════════════════ */
+
+const canvas = document.getElementById('nebula');
+let ctx = null;
+try {
+  ctx = canvas.getContext('2d');
+} catch (err) {
+  console.warn('Canvas 2D context not available:', err);
+}
+
+let canvasW, canvasH;
+let stars = [];
+const STAR_COUNT = 200;
+const MAX_FRAME_MS = 50;   // if frame takes >50ms, reduce particle count
+
+// Current canvas background color (RGB)
+let bgColor = { r: 0, g: 0, b: 0 };
+let targetColor = { r: 10, g: 10, b: 15 };  // fallback #0a0a0f
+
+// Sunrise state
+let sunriseActive = false;
+let sunriseStartTime = 0;
+
+// Canvas available flag
+let canvasOk = ctx !== null;
+
+/* ═══════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════ */
+
+function hexToRgb(hex) {
+  const val = parseInt(hex.replace('#', ''), 16);
+  return { r: (val >> 16) & 255, g: (val >> 8) & 255, b: val & 255 };
+}
+
+function lerpChannel(a, b, t) { return Math.round(a + (b - a) * t); }
+
+function lerpColor(a, b, t) {
+  return {
+    r: lerpChannel(a.r, b.r, t),
+    g: lerpChannel(a.g, b.g, t),
+    b: lerpChannel(a.b, b.b, t),
+  };
+}
+
+function rgbToStyle(c) {
+  return `rgb(${c.r}, ${c.g}, ${c.b})`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CANVAS SETUP
+   ═══════════════════════════════════════════════════════════ */
+
+function resizeCanvas() {
+  canvasW = canvas.width = window.innerWidth;
+  canvasH = canvas.height = window.innerHeight;
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+/* ═══════════════════════════════════════════════════════════
+   STARS
+   ═══════════════════════════════════════════════════════════ */
+
+function createStar() {
+  return {
+    x: Math.random() * canvasW,
+    y: Math.random() * canvasH,
+    radius: 0.5 + Math.random() * 2,
+    speed: 0.1 + Math.random() * 0.4,
+    alpha: 0.3 + Math.random() * 0.7,
+  };
+}
+
+function initStars(count) {
+  stars = [];
+  for (let i = 0; i < count; i++) {
+    stars.push(createStar());
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ANIMATION LOOP
+   ═══════════════════════════════════════════════════════════ */
+
+let lastFrameTime = 0;
+let animActive = true;
+let currentStarCount = STAR_COUNT;
+
+function animate(timestamp) {
+  if (!animActive) return;
+  if (!canvasOk) return;
+
+  // Track frame performance
+  if (lastFrameTime > 0) {
+    const delta = timestamp - lastFrameTime;
+    if (delta > MAX_FRAME_MS && currentStarCount > 100) {
+      currentStarCount = 100;
+      initStars(currentStarCount);
+    }
+  }
+  lastFrameTime = timestamp;
+
+  // Clear canvas with background color
+  ctx.fillStyle = rgbToStyle(bgColor);
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Draw stars
+  for (const star of stars) {
+    star.y -= star.speed;
+    if (star.y + star.radius < 0) {
+      star.y = canvasH + star.radius;
+      star.x = Math.random() * canvasW;
+    }
+
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
+    ctx.fill();
+  }
+
+  requestAnimationFrame(animate);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COLOR INTERPOLATION
+   ═══════════════════════════════════════════════════════════ */
+
+let colorLerpActive = false;
+let colorLerpStart = 0;
+let colorLerpDuration = 5000;  // 5 seconds
+let colorLerpFrom = { r: 0, g: 0, b: 0 };
+let colorLerpTo = { r: 10, g: 10, b: 15 };
+
+function startColorLerp(from, to, duration) {
+  colorLerpFrom = from;
+  colorLerpTo = to;
+  colorLerpDuration = duration;
+  colorLerpActive = true;
+  colorLerpStart = performance.now();
+}
+
+function updateColorLerp() {
+  if (!colorLerpActive) return;
+
+  const elapsed = performance.now() - colorLerpStart;
+  const t = Math.min(elapsed / colorLerpDuration, 1);
+  bgColor = lerpColor(colorLerpFrom, colorLerpTo, t);
+
+  if (t >= 1) {
+    bgColor = { ...colorLerpTo };
+    colorLerpActive = false;
+  }
+}
+
+// Patch the animate loop to also update color lerp
+const _origAnimate = animate;
+animate = function(timestamp) {
+  updateColorLerp();
+  _origAnimate(timestamp);
+};
+
+/* ═══════════════════════════════════════════════════════════
+   FETCH: /api/time_color
+   ═══════════════════════════════════════════════════════════ */
+
+async function fetchTimeColor() {
+  try {
+    const res = await fetch('/api/time_color');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    targetColor = hexToRgb(data.hex);
+  } catch (err) {
+    console.warn('Failed to fetch /api/time_color, using fallback:', err);
+    targetColor = { r: 10, g: 10, b: 15 };
+  }
+
+  // Start 5-second interpolation from current bg to target
+  startColorLerp({ ...bgColor }, targetColor, 5000);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FETCH: /api/today
+   ═══════════════════════════════════════════════════════════ */
+
+async function fetchToday() {
+  try {
+    const res = await fetch('/api/today');
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = document.getElementById('today-list');
+    const panel = document.getElementById('today-panel');
+    list.innerHTML = '';
+    if (data.items && data.items.length > 0) {
+      data.items.forEach(text => {
+        if (typeof text !== 'string') return;  // skip non-string entries
+        const li = document.createElement('li');
+        li.textContent = text;
+        list.appendChild(li);
+      });
+      panel.classList.add('visible');
+    } else {
+      panel.classList.remove('visible');
+    }
+  } catch (err) {
+    console.warn('Failed to fetch /api/today:', err);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN QUEST (localStorage)
+   ═══════════════════════════════════════════════════════════ */
+
+const questInput = document.getElementById('main-quest');
+
+function loadQuest() {
+  const saved = localStorage.getItem('horizon_main_quest');
+  if (saved) questInput.value = saved;
+}
+
+function saveQuest() {
+  localStorage.setItem('horizon_main_quest', questInput.value);
+}
+
+questInput.addEventListener('input', saveQuest);
+questInput.addEventListener('change', saveQuest);
+
+/* ═══════════════════════════════════════════════════════════
+   CHAOS TAMER
+   ═══════════════════════════════════════════════════════════ */
+
+const textarea = document.getElementById('chaos-textarea');
+const tameBtn = document.getElementById('tame-btn');
+const errorBanner = document.getElementById('error-banner');
+const loadingText = document.getElementById('loading-text');
+const cardsContainer = document.getElementById('cards-container');
+
+function showError(msg) {
+  errorBanner.textContent = msg;
+  errorBanner.style.display = 'block';
+}
+
+function hideError() {
+  errorBanner.style.display = 'none';
+}
+
+tameBtn.addEventListener('click', async () => {
+  hideError();
+  const raw = textarea.value.trim();
+  if (!raw) {
+    showError('Nothing to tame!');
+    return;
+  }
+
+  tameBtn.disabled = true;
+  loadingText.style.display = 'block';
+
+  try {
+    const res = await fetch('/api/classify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: raw }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new Error(errData.detail || `Server error (${res.status})`);
+    }
+
+    const data = await res.json();
+    renderCards(data);
+  } catch (err) {
+    showError('Classification failed. Check your API key or try again.');
+    console.error('Classification error:', err);
+  } finally {
+    tameBtn.disabled = false;
+    loadingText.style.display = 'none';
+  }
+});
+
+/* ── Draggable Cards ──────────────────────────────────── */
+
+function renderCards(data) {
+  cardsContainer.style.display = 'flex';
+  cardsContainer.innerHTML = '';
+
+  const columns = [
+    { key: 'now',   label: 'Now',   cssClass: 'column-now' },
+    { key: 'later', label: 'Later', cssClass: 'column-later' },
+    { key: 'trash', label: 'Trash', cssClass: 'column-trash' },
+  ];
+
+  for (const col of columns) {
+    const div = document.createElement('div');
+    div.className = `card-column ${col.cssClass}`;
+    div.dataset.column = col.key;
+
+    const h3 = document.createElement('h3');
+    h3.textContent = col.label;
+    div.appendChild(h3);
+
+    const items = data[col.key] || [];
+    for (const text of items) {
+      const card = document.createElement('div');
+      card.className = `chaos-card card-${col.key}`;
+      card.draggable = true;
+      card.textContent = text;
+      card.dataset.category = col.key;
+
+      // Drag start
+      card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', text);
+        e.dataTransfer.effectAllowed = 'move';
+        card.classList.add('dragging');
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        document.querySelectorAll('.card-column').forEach(c => c.classList.remove('drag-over'));
+      });
+
+      div.appendChild(card);
+    }
+
+    // Drop zone
+    div.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      div.classList.add('drag-over');
+    });
+
+    div.addEventListener('dragleave', () => {
+      div.classList.remove('drag-over');
+    });
+
+    div.addEventListener('drop', (e) => {
+      e.preventDefault();
+      div.classList.remove('drag-over');
+
+      const dragging = document.querySelector('.chaos-card.dragging');
+      if (dragging && div !== dragging.parentElement) {
+        // Clone the card, remove old, add to new column
+        const text = dragging.textContent;
+        const colKey = div.dataset.column;
+        const newCard = document.createElement('div');
+        newCard.className = `chaos-card card-${colKey}`;
+        newCard.draggable = true;
+        newCard.textContent = text;
+        newCard.dataset.category = colKey;
+
+        // Re-bind drag events
+        newCard.addEventListener('dragstart', (ev) => {
+          ev.dataTransfer.setData('text/plain', text);
+          ev.dataTransfer.effectAllowed = 'move';
+          newCard.classList.add('dragging');
+        });
+        newCard.addEventListener('dragend', () => {
+          newCard.classList.remove('dragging');
+          document.querySelectorAll('.card-column').forEach(c => c.classList.remove('drag-over'));
+        });
+
+        dragging.remove();
+        div.appendChild(newCard);
+      }
+    });
+
+    cardsContainer.appendChild(div);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SUNRISE
+   ═══════════════════════════════════════════════════════════ */
+
+const sunriseBtn = document.getElementById('sunrise-btn');
+const SUNRISE_DURATION = 60000;  // 60 seconds
+const SUNRISE_GOLD = { r: 255, g: 215, b: 0 };
+
+sunriseBtn.addEventListener('click', () => {
+  startSunriseSequence();
+});
+
+/* ═══════════════════════════════════════════════════════════
+   AUTO-SUNRISE SCHEDULER
+   ═══════════════════════════════════════════════════════════ */
+
+const sunriseGear = document.getElementById('sunrise-gear');
+const sunriseSettings = document.getElementById('sunrise-settings');
+const sunriseToggle = document.getElementById('sunrise-toggle');
+const sunriseTimeInput = document.getElementById('sunrise-time');
+
+let autoSunrisePollId = null;
+let autoSunriseLocalEnabled = false;
+let autoSunriseLocalTime = '07:00';
+
+// ── Settings panel toggle ──────────────────────────────
+
+sunriseGear.addEventListener('click', () => {
+  sunriseSettings.classList.toggle('visible');
+  sunriseGear.classList.toggle('active');
+  if (sunriseSettings.classList.contains('visible')) {
+    loadScheduleFromServer();
+  }
+});
+
+// ── Load schedule from server ──────────────────────────
+
+async function loadScheduleFromServer() {
+  try {
+    const res = await fetch('/api/sunrise/schedule');
+    if (!res.ok) return;
+    const data = await res.json();
+    sunriseToggle.checked = data.enabled;
+    sunriseTimeInput.value = data.time;
+    autoSunriseLocalEnabled = data.enabled;
+    autoSunriseLocalTime = data.time;
+    saveAutoSunriseLocal();
+  } catch (err) {
+    console.warn('Failed to load sunrise schedule, using localStorage:', err);
+    loadAutoSunriseLocal();
+  }
+}
+
+// ── Save schedule to server ────────────────────────────
+
+async function saveScheduleToServer(enabled, time) {
+  try {
+    const res = await fetch('/api/sunrise/schedule', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, time }),
+    });
+    if (!res.ok) {
+      console.warn('Failed to save sunrise schedule:', await res.text());
+    }
+  } catch (err) {
+    console.warn('Failed to save sunrise schedule:', err);
+  }
+}
+
+// ── UI change handlers ─────────────────────────────────
+
+sunriseToggle.addEventListener('change', () => {
+  const enabled = sunriseToggle.checked;
+  const time = sunriseTimeInput.value || '07:00';
+  autoSunriseLocalEnabled = enabled;
+  autoSunriseLocalTime = time;
+  saveScheduleToServer(enabled, time);
+  saveAutoSunriseLocal();
+});
+
+sunriseTimeInput.addEventListener('change', () => {
+  const enabled = sunriseToggle.checked;
+  const time = sunriseTimeInput.value || '07:00';
+  autoSunriseLocalEnabled = enabled;
+  autoSunriseLocalTime = time;
+  saveScheduleToServer(enabled, time);
+  saveAutoSunriseLocal();
+});
+
+// ── localStorage fallback ──────────────────────────────
+
+function saveAutoSunriseLocal() {
+  try {
+    localStorage.setItem('horizon_auto_sunrise', JSON.stringify({
+      enabled: autoSunriseLocalEnabled,
+      time: autoSunriseLocalTime,
+    }));
+  } catch (err) {
+    console.warn('localStorage quota exceeded for auto-sunrise:', err);
+  }
+}
+
+function loadAutoSunriseLocal() {
+  try {
+    const saved = localStorage.getItem('horizon_auto_sunrise');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed.enabled === 'boolean') {
+        autoSunriseLocalEnabled = parsed.enabled;
+        sunriseToggle.checked = parsed.enabled;
+      }
+      if (typeof parsed.time === 'string') {
+        autoSunriseLocalTime = parsed.time;
+        sunriseTimeInput.value = parsed.time;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load auto-sunrise from localStorage:', err);
+  }
+}
+
+// ── Polling: check server for sunrise trigger ──────────
+
+async function checkSunriseTrigger() {
+  try {
+    const res = await fetch('/api/sunrise/schedule');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.sunrise_triggered) {
+      console.log('Auto-sunrise triggered by server!');
+      startSunriseSequence();
+    }
+  } catch (err) {
+    // Server unreachable — fall back to local time check
+    checkLocalSunriseTime();
+  }
+}
+
+// ── Local time fallback ────────────────────────────────
+
+function checkLocalSunriseTime() {
+  if (!autoSunriseLocalEnabled) return;
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const [h, m] = autoSunriseLocalTime.split(':').map(Number);
+  const targetMinutes = h * 60 + m;
+
+  if (currentMinutes === targetMinutes) {
+    const todayKey = now.toDateString();
+    const lastTrigger = localStorage.getItem('horizon_last_sunrise_date');
+    if (lastTrigger !== todayKey) {
+      try {
+        localStorage.setItem('horizon_last_sunrise_date', todayKey);
+      } catch (err) {
+        console.warn('localStorage quota exceeded:', err);
+      }
+      console.log('Auto-sunrise triggered by local time!');
+      startSunriseSequence();
+    }
+  }
+}
+
+// ── Start sunrise (reusable for both manual and auto) ──
+
+function startSunriseSequence() {
+  if (sunriseActive) return;
+  sunriseActive = true;
+  sunriseBtn.disabled = true;
+  document.body.classList.add('sunrise-active');
+
+  // Countdown timer — updates button text each second
+  let remainingSeconds = Math.ceil(SUNRISE_DURATION / 1000);
+  sunriseBtn.textContent = `☀️ ${remainingSeconds}s`;
+  const countdownId = setInterval(() => {
+    remainingSeconds--;
+    if (remainingSeconds > 0) {
+      sunriseBtn.textContent = `☀️ ${remainingSeconds}s`;
+    }
+  }, 1000);
+
+  // Shared cleanup (called from both success and error paths)
+  function cleanupSunrise() {
+    clearInterval(countdownId);
+    sunriseActive = false;
+    sunriseBtn.disabled = false;
+    sunriseBtn.textContent = '☀️ Start Sunrise';
+    document.body.classList.remove('sunrise-active');
+    fetchTimeColor();  // restore time-aware background
+  }
+
+  // 1. Visual: lerp to gold over 60s
+  const startBg = { ...bgColor };
+  startColorLerp(startBg, SUNRISE_GOLD, SUNRISE_DURATION);
+
+  // 2. Audio: Web Audio API sine wave 440Hz → 880Hz
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+    oscillator.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + SUNRISE_DURATION / 1000);
+
+    const fadeInEnd = audioCtx.currentTime + 2;
+    const fadeOutStart = audioCtx.currentTime + (SUNRISE_DURATION / 1000) - 5;
+    const endTime = audioCtx.currentTime + SUNRISE_DURATION / 1000;
+
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.15, fadeInEnd);
+    gainNode.gain.setValueAtTime(0.15, fadeOutStart);
+    gainNode.gain.linearRampToValueAtTime(0, endTime);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(endTime);
+
+    setTimeout(() => {
+      cleanupSunrise();
+      audioCtx.close().catch(() => {});
+    }, SUNRISE_DURATION + 200);
+  } catch (err) {
+    console.warn('Web Audio not available for auto-sunrise:', err);
+    setTimeout(cleanupSunrise, SUNRISE_DURATION + 200);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIVITY TRACKING (v0.2)
+   ═══════════════════════════════════════════════════════════ */
+
+const activityIndicator = document.getElementById('activity-indicator');
+const focusBars = document.getElementById('focus-bars');
+let activityPollId = null;
+
+// ── Bridge detection ──────────────────────────────────
+const hasJsApi = typeof pywebview !== 'undefined' && pywebview.api;
+
+// ── Update activity indicator ─────────────────────────
+function updateActivityIndicator(data) {
+  if (!activityIndicator) return;
+  if (!data || data.app_name === 'unknown') {
+    activityIndicator.classList.remove('visible');
+    return;
+  }
+
+  let text = '\uD83D\uDDA5\uFE0F ';
+  // Use window title for better readability
+  if (data.window_title) {
+    text += data.window_title.substring(0, 30);
+  } else {
+    text += data.app_name;
+  }
+
+  if (data.idle_seconds > 60) {
+    const mins = Math.floor(data.idle_seconds / 60);
+    text = '\uD83D\uDCA4 Away (' + mins + 'm)';
+    activityIndicator.classList.add('idle');
+  } else {
+    activityIndicator.classList.remove('idle');
+  }
+
+  activityIndicator.textContent = text;
+  activityIndicator.classList.add('visible');
+  activityIndicator.classList.add('pulse');
+  setTimeout(() => activityIndicator.classList.remove('pulse'), 2000);
+}
+
+// ── Update focus panel ────────────────────────────────
+function updateFocusPanel(data) {
+  if (!focusBars) return;
+  focusBars.innerHTML = '';
+
+  if (!data || !data.blocks || data.blocks.length === 0) {
+    document.getElementById('focus-panel').classList.remove('visible');
+    // Show placeholder when no activity data
+    const emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'opacity:0.4;font-size:0.75rem;padding:8px 0;';
+    emptyMsg.textContent = 'No activity data yet. Start using your computer!';
+    focusBars.appendChild(emptyMsg);
+    return;
+  }
+
+  document.getElementById('focus-panel').classList.add('visible');
+
+  for (const block of data.blocks) {
+    const row = document.createElement('div');
+    row.className = 'focus-bar-row';
+    row.dataset.appName = block.app_name;
+
+    const label = document.createElement('span');
+    label.className = 'focus-bar-label';
+    label.textContent = block.app_name.replace(/\.exe$/i, '').substring(0, 10);
+
+    const track = document.createElement('div');
+    track.className = 'focus-bar-track';
+
+    const fill = document.createElement('div');
+    fill.className = 'focus-bar-fill focus';
+    fill.style.width = Math.max(block.percentage, 2) + '%';
+    fill.style.backgroundColor = getCategoryColor(block.category || 'focus');
+
+    const pct = document.createElement('span');
+    pct.className = 'focus-bar-pct';
+    pct.textContent = block.percentage + '%';
+
+    track.appendChild(fill);
+    row.appendChild(label);
+    row.appendChild(track);
+    row.appendChild(pct);
+
+    row.addEventListener('click', () => {
+      toggleAppCategory(row.dataset.appName);
+    });
+
+    focusBars.appendChild(row);
+  }
+
+  // Hide the old today-list if focus panel is shown
+  const todayList = document.getElementById('today-list');
+  if (todayList) todayList.style.display = 'none';
+}
+
+function getCategoryColor(category) {
+  const colors = {
+    'focus': '#FFD700',
+    'distraction': '#e05050',
+    'neutral': '#888',
+    'idle': '#557',
+    'away': '#335'
+  };
+  return colors[category] || '#FFD700';
+}
+
+async function toggleAppCategory(appName) {
+  try {
+    // Simple cycle: focus -> distraction -> neutral -> focus
+    const res = await fetch('/api/activity/categories');
+    const data = await res.json();
+    const existing = data.categories.find(c => c.app_name === appName);
+    const cycle = { 'focus': 'distraction', 'distraction': 'neutral', 'neutral': 'focus', 'idle': 'focus', 'away': 'focus' };
+    const nextCat = cycle[existing ? existing.category : 'focus'] || 'focus';
+    await fetch('/api/activity/categories', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_name: appName, category: nextCat })
+    });
+    // Refresh focus panel
+    await fetchAndDisplayFocusSummary();
+  } catch (err) {
+    console.warn('Failed to toggle app category:', err);
+  }
+}
+
+async function fetchAndDisplayFocusSummary() {
+  try {
+    const res = await fetch('/api/activity/summary?period=today');
+    if (!res.ok) return;
+    const data = await res.json();
+    updateFocusPanel(data);
+  } catch (err) {
+    console.warn('Failed to fetch focus summary:', err);
+  }
+}
+
+// ── Polling fallback ──────────────────────────────────
+async function fetchActivityNow() {
+  try {
+    const res = await fetch('/api/activity/now');
+    if (!res.ok) return;
+    const data = await res.json();
+    updateActivityIndicator(data);
+  } catch (err) {
+    console.warn('Failed to fetch activity:', err);
+  }
+}
+
+function startActivityPolling() {
+  if (activityPollId) clearInterval(activityPollId);
+  activityPollId = setInterval(fetchActivityNow, 30000);
+  fetchActivityNow();
+}
+
+// ── SSE client ────────────────────────────────────────
+let activitySSE = null;
+
+function startActivityTracking() {
+  if (hasJsApi) {
+    // Desktop bridge — try bridge first, fall back to SSE
+    console.log('PyWebView bridge detected — using JS API');
+    startActivityPolling();
+    return;
+  }
+
+  try {
+    activitySSE = new EventSource('/api/activity/stream');
+
+    activitySSE.addEventListener('activity', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        updateActivityIndicator(data);
+        // Refresh focus panel periodically (not on every activity event)
+      } catch (err) {
+        console.warn('Failed to parse activity SSE data:', err);
+      }
+    });
+
+    activitySSE.addEventListener('error', () => {
+      // SSE disconnected — fall back to polling
+      activitySSE.close();
+      activitySSE = null;
+      console.log('SSE disconnected — falling back to polling');
+      startActivityPolling();
+    });
+  } catch (err) {
+    console.warn('SSE not available — using polling:', err);
+    startActivityPolling();
+  }
+
+  // Poll focus summary every 30s alongside SSE
+  setInterval(fetchAndDisplayFocusSummary, 30000);
+  // Also fetch on initial load
+  setTimeout(fetchAndDisplayFocusSummary, 2000);
+}
+
+// ── Start polling on page load ─────────────────────────
+
+function startAutoSunrisePolling() {
+  // Load schedule from server or localStorage
+  loadScheduleFromServer();
+
+  // Poll server every 15s for sunrise trigger
+  autoSunrisePollId = setInterval(checkSunriseTrigger, 15000);
+
+  // Also check local time every 30s as backup
+  setInterval(checkLocalSunriseTime, 30000);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════ */
+
+document.addEventListener('DOMContentLoaded', async () => {
+  resizeCanvas();
+  initStars(currentStarCount);
+
+  // 1. Load Main Quest
+  loadQuest();
+
+  // 2. Fetch time color → start interpolation
+  await fetchTimeColor();
+
+  // 3. Start canvas animation loop
+  requestAnimationFrame(animate);
+
+  // 4. Fetch today's focus
+  await fetchToday();
+
+  // 5. Start auto-sunrise scheduler polling
+  startAutoSunrisePolling();
+
+  // 6. Start activity tracking (SSE or polling)
+  startActivityTracking();
+});
+</script>
+
+</body>
+</html>

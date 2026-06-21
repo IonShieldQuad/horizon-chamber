@@ -1,0 +1,15 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+aiosqlite==0.20.0
+httpx==0.28.1
+python-dotenv==1.0.1
+
+# Desktop app (pywebview uses the system's native web engine)
+pywebview>=6.2,<7
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# Build
+pyinstaller>=6.0,<7
