@@ -1,3 +1,3 @@
 
 
-Refer to "requirements\_activity\_[tracking.md"](http://tracking.md)
+Refer to "requirements\_goals\_[kanban.md"](http://tracking.md)

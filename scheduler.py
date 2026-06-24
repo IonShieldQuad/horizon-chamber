@@ -24,11 +24,17 @@ _schedule: dict = {
 # ── Public API (called by route handlers) ────────────────────────────────
 
 def get_schedule() -> dict:
-    """Return a copy of the current schedule state."""
+    """Return a copy of the current schedule state.
+
+    Consumes the sunrise_triggered flag so the frontend sees it exactly once.
+    """
+    triggered = _schedule["sunrise_triggered"]
+    if triggered:
+        _schedule["sunrise_triggered"] = False
     return {
         "enabled": _schedule["enabled"],
         "time": _schedule["time"],
-        "sunrise_triggered": _schedule["sunrise_triggered"],
+        "sunrise_triggered": triggered,
     }
 
 

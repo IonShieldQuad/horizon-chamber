@@ -53,6 +53,23 @@ def test_schedule_consume_trigger():
     assert scheduler.consume_sunrise_trigger() is False
 
 
+def test_get_schedule_consumes_trigger():
+    """get_schedule() consumes sunrise_triggered so it only fires once."""
+    scheduler.set_schedule(enabled=True, time="07:00")
+    scheduler._schedule["sunrise_triggered"] = True
+
+    # First call returns True
+    sched1 = scheduler.get_schedule()
+    assert sched1["sunrise_triggered"] is True
+
+    # Second call returns False (consumed)
+    sched2 = scheduler.get_schedule()
+    assert sched2["sunrise_triggered"] is False
+
+    # Internal flag is now False
+    assert scheduler._schedule["sunrise_triggered"] is False
+
+
 def test_schedule_triggers_correct_time():
     """Background logic sets sunrise_triggered when time matches."""
     scheduler.set_schedule(enabled=True, time="07:00")

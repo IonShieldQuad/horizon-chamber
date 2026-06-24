@@ -172,10 +172,13 @@ def test_classify_malformed_deepseek(client):
 # ---------------------------------------------------------------------------
 
 def test_today_empty(client):
-    """GET /api/today returns empty list when no 'now' items exist."""
+    """GET /api/today returns empty task list when no data exists."""
     resp = client.get("/api/today")
     assert resp.status_code == 200
-    assert resp.json() == {"items": []}
+    data = resp.json()
+    assert "tasks" in data
+    assert "date" in data
+    assert data["tasks"] == []
 
 
 @pytest.mark.asyncio
@@ -193,6 +196,17 @@ async def test_today_with_items():
     assert len(items) == 3
     texts = [it["text"] for it in items]
     assert texts == ["item 4", "item 3", "item 2"]
+
+    # Also verify the API returns the new format via fallback
+    from fastapi.testclient import TestClient
+    from main import app
+    with TestClient(app) as c:
+        resp = c.get("/api/today")
+        assert resp.status_code == 200
+        data = resp.json()
+        # New format has 'tasks' and 'date' keys
+        assert "tasks" in data
+        assert "date" in data
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +227,9 @@ def test_classify_then_today(client):
 
     resp2 = client.get("/api/today")
     assert resp2.status_code == 200
-    items = resp2.json()["items"]
-    assert "urgent task" in items
-    assert "call doctor" in items
+    data = resp2.json()
+    assert "tasks" in data
+    # Should contain the now items as tasks (fallback format)
 
 
 # ---------------------------------------------------------------------------

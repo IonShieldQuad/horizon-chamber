@@ -275,3 +275,300 @@ async def test_prune_old_activity(tmp_path):
     items = await db_mod.get_recent_activity(limit=10)
     assert len(items) == 1
     assert items[0]["app_name"] == "recent.exe"
+
+
+# ── Goals ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_insert_and_get_goal(tmp_path):
+    """Insert a goal of each type and verify fields."""
+    db_path = tmp_path / "goals1.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid1 = await db_mod.insert_goal("long_term", "Learn Python", "Master Python", target_days=90)
+    gid2 = await db_mod.insert_goal("habit", "Walk daily", frequency="daily")
+    gid3 = await db_mod.insert_goal("maintenance", "Clean PC", frequency="custom", custom_interval_days=7)
+
+    g1 = await db_mod.get_goal(gid1)
+    assert g1 is not None
+    assert g1["type"] == "long_term"
+    assert g1["title"] == "Learn Python"
+    assert g1["target_days"] == 90
+    assert g1["frequency"] == "daily"
+    assert g1["archived"] == 0
+
+    g2 = await db_mod.get_goal(gid2)
+    assert g2["type"] == "habit"
+    assert g2["frequency"] == "daily"
+
+    g3 = await db_mod.get_goal(gid3)
+    assert g3["type"] == "maintenance"
+    assert g3["frequency"] == "custom"
+    assert g3["custom_interval_days"] == 7
+
+
+@pytest.mark.asyncio
+async def test_goal_archive(tmp_path):
+    """Archive a goal and verify it's soft-deleted."""
+    db_path = tmp_path / "goals2.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid = await db_mod.insert_goal("habit", "Read books")
+    await db_mod.archive_goal(gid)
+
+    g = await db_mod.get_goal(gid)
+    assert g["archived"] == 1
+
+    # Should not appear in default list
+    goals = await db_mod.get_goals()
+    assert len(goals) == 0
+
+    # Should appear when archived=True
+    archived = await db_mod.get_goals(archived=True)
+    assert len(archived) == 1
+    assert archived[0]["id"] == gid
+
+
+@pytest.mark.asyncio
+async def test_get_goals_filter_by_type(tmp_path):
+    """get_goals with type filter returns only matching goals."""
+    db_path = tmp_path / "goals3.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    await db_mod.insert_goal("long_term", "Project X")
+    await db_mod.insert_goal("habit", "Exercise")
+    await db_mod.insert_goal("maintenance", "Backup")
+
+    all_goals = await db_mod.get_goals()
+    assert len(all_goals) == 3
+
+    habits = await db_mod.get_goals(goal_type="habit")
+    assert len(habits) == 1
+    assert habits[0]["title"] == "Exercise"
+
+
+@pytest.mark.asyncio
+async def test_update_goal_fields(tmp_path):
+    """Update goal fields and verify changes."""
+    db_path = tmp_path / "goals4.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid = await db_mod.insert_goal("long_term", "Old Title", progress_pct=10.0)
+    updated = await db_mod.update_goal(gid, title="New Title", progress_pct=50.0)
+    assert updated["title"] == "New Title"
+    assert updated["progress_pct"] == 50.0
+
+    # Verify persisted
+    g = await db_mod.get_goal(gid)
+    assert g["title"] == "New Title"
+
+
+# ── Tasks ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_insert_task_and_query(tmp_path):
+    """Insert a task for a goal and query by date and goal."""
+    db_path = tmp_path / "tasks1.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid = await db_mod.insert_goal("habit", "Walk")
+    tid = await db_mod.insert_task(gid, "Walk the dog", "2025-01-15")
+
+    t = await db_mod.get_task(tid)
+    assert t is not None
+    assert t["title"] == "Walk the dog"
+    assert t["goal_id"] == gid
+    assert t["date"] == "2025-01-15"
+    assert t["status"] == "pending"
+
+    # Query by date
+    day_tasks = await db_mod.get_tasks_for_date("2025-01-15")
+    assert len(day_tasks) == 1
+    assert day_tasks[0]["id"] == tid
+
+    # Query by goal
+    goal_tasks = await db_mod.get_tasks_for_goal(gid)
+    assert len(goal_tasks) == 1
+
+
+@pytest.mark.asyncio
+async def test_task_status_update(tmp_path):
+    """Update task status to done and verify completed_at is set."""
+    db_path = tmp_path / "tasks2.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid = await db_mod.insert_goal("habit", "Read")
+    tid = await db_mod.insert_task(gid, "Read chapter 3", "2025-01-15")
+
+    await db_mod.update_task(tid, status="done")
+    t = await db_mod.get_task(tid)
+    assert t["status"] == "done"
+    assert t["completed_at"] is not None
+
+    # Update back
+    await db_mod.update_task(tid, status="pending")
+    t = await db_mod.get_task(tid)
+    assert t["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_get_tasks_for_date_multiple(tmp_path):
+    """Insert multiple tasks on same date and verify ordering."""
+    db_path = tmp_path / "tasks3.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid = await db_mod.insert_goal("habit", "Exercise")
+    t1 = await db_mod.insert_task(gid, "Pushups", "2025-01-15")
+    t2 = await db_mod.insert_task(gid, "Squats", "2025-01-15")
+
+    tasks = await db_mod.get_tasks_for_date("2025-01-15")
+    assert len(tasks) == 2
+
+
+@pytest.mark.asyncio
+async def test_overdue_tasks(tmp_path):
+    """Tasks with past dates and pending status appear as overdue."""
+    db_path = tmp_path / "tasks4.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid = await db_mod.insert_goal("long_term", "Project A")
+    await db_mod.insert_task(gid, "Old task", "2025-01-10")
+    await db_mod.insert_task(gid, "Done task", "2025-01-10")
+    await db_mod.update_task(gid + 1, status="done")  # make second task done
+
+    # Re-fetch after update
+    all_tasks = await db_mod.get_tasks_for_date("2025-01-10")
+    # Mark the second as done
+    await db_mod.update_task(all_tasks[1]["id"], status="done")
+
+    overdue = await db_mod.get_overdue_tasks("2025-01-15")
+    # Should find the pending task from Jan 10
+    assert len(overdue) >= 1
+    assert all(t["date"] < "2025-01-15" for t in overdue)
+    assert all(t["status"] in ("pending", "doing") for t in overdue)
+
+
+# ── Task Log ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_task_log_insert_and_query(tmp_path):
+    """Log a task action and retrieve it."""
+    db_path = tmp_path / "log1.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    gid = await db_mod.insert_goal("habit", "Meditate")
+    tid = await db_mod.insert_task(gid, "Meditate 10min", "2025-01-15")
+    log_id = await db_mod.insert_task_log(tid, gid, "done", "2025-01-15",
+                                          ai_analysis='{"mood": "good"}')
+
+    assert isinstance(log_id, int) and log_id > 0
+
+    # Query by goal
+    entries = await db_mod.get_task_log_for_goal(gid)
+    assert len(entries) == 1
+    assert entries[0]["action"] == "done"
+    assert entries[0]["ai_analysis"] == '{"mood": "good"}'
+
+    # Query by date
+    by_date = await db_mod.get_task_log_for_date("2025-01-15")
+    assert len(by_date) == 1
+    assert by_date[0]["task_id"] == tid
+
+
+# ── Schema Migration ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_db_migration_v2_to_v3(tmp_path):
+    """Create a v2 database, run init_db, verify v3 tables exist and chaos data preserved."""
+    db_path = tmp_path / "migrate.db"
+    os.environ["DATABASE_PATH"] = str(db_path)
+
+    # Create a v2 database manually
+    import aiosqlite
+    conn = await aiosqlite.connect(str(db_path))
+    await conn.execute("PRAGMA user_version = 2")
+    await conn.executescript("""
+        CREATE TABLE IF NOT EXISTS chaos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL,
+            text TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app_name TEXT NOT NULL DEFAULT 'unknown',
+            window_title TEXT NOT NULL DEFAULT '',
+            idle_seconds REAL NOT NULL DEFAULT 0.0,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO chaos (category, text) VALUES ('now', 'preserved item');
+    """)
+    await conn.commit()
+    await conn.close()
+
+    # Now run init_db — should migrate to v3
+    import db as db_mod
+    import importlib
+    importlib.reload(db_mod)
+    await db_mod.init_db()
+
+    # Verify user_version is 3
+    conn2 = await aiosqlite.connect(str(db_path))
+    cursor = await conn2.execute("PRAGMA user_version")
+    row = await cursor.fetchone()
+    assert row[0] == 4, f"Expected version 4, got {row[0]}"
+
+    # Verify v3 tables exist
+    cursor = await conn2.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('goals', 'tasks', 'task_log')")
+    tables = {row[0] for row in await cursor.fetchall()}
+    assert "goals" in tables
+    assert "tasks" in tables
+    assert "task_log" in tables
+
+    # Verify chaos data preserved
+    cursor = await conn2.execute("SELECT text FROM chaos WHERE category='now'")
+    items = await cursor.fetchall()
+    assert len(items) == 1
+    assert items[0][0] == "preserved item"
+
+    await conn2.close()

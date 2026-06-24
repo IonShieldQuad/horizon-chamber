@@ -3,6 +3,7 @@
 Schema version history:
   version 1 — v0.1 MVP: chaos table (now/later/trash classification)
   version 2 — v0.2: activity_log, time_blocks, app_categories tables
+  version 3 — v0.3: goals, tasks, task_log tables for dynamic kanban goals system
 """
 
 import os
@@ -50,6 +51,56 @@ CREATE TABLE IF NOT EXISTS app_categories (
     label TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Goals — the parent entity for the kanban board
+CREATE TABLE IF NOT EXISTS goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL CHECK(type IN ('long_term', 'habit', 'maintenance')),
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    frequency TEXT DEFAULT 'daily' CHECK(frequency IN ('daily', 'weekly', 'custom')),
+    custom_interval_days INTEGER,
+    target_days INTEGER,
+    progress_pct REAL DEFAULT 0.0,
+    paused INTEGER DEFAULT 0,
+    archived INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tasks — individual work items generated from goals
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id INTEGER NOT NULL REFERENCES goals(id),
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'doing', 'done', 'skipped', 'carried_over')),
+    carry_over_count INTEGER DEFAULT 0,
+    parent_task_id INTEGER,
+    ai_suggested INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_date ON tasks(date);
+CREATE INDEX IF NOT EXISTS idx_tasks_goal_id ON tasks(goal_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+
+-- Task completions log — append-only, for analysis
+CREATE TABLE IF NOT EXISTS task_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id),
+    goal_id INTEGER NOT NULL REFERENCES goals(id),
+    action TEXT NOT NULL CHECK(action IN ('pending', 'doing', 'done', 'skipped', 'carried_over', 'split', 'auto_generated')),
+    date TEXT NOT NULL,
+    ai_analysis TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -78,8 +129,42 @@ async def init_db():
         await db.executescript(SCHEMA_SQL)
 
         current_ver = await _get_schema_version(db)
-        if current_ver < 2:
-            await _set_schema_version(db, 2)
+
+        if current_ver == 0:
+            # Fresh database — SCHEMA_SQL already creates v4 tables
+            await _set_schema_version(db, 4)
+            await db.commit()
+            return
+
+        if current_ver == 2:
+            # Migration v2 → v3: add goals, tasks, task_log tables
+            await _set_schema_version(db, 3)
+            await db.commit()
+            import logging
+            logging.getLogger(__name__).info("Schema migrated from v2 to v3")
+            # Fall through to v3→v4
+
+        if current_ver <= 3:
+            # Migration v3 → v4: widen task_log action CHECK to include pending/doing
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS task_log_v4 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL REFERENCES tasks(id),
+                    goal_id INTEGER NOT NULL REFERENCES goals(id),
+                    action TEXT NOT NULL CHECK(action IN ('pending', 'doing', 'done', 'skipped', 'carried_over', 'split', 'auto_generated')),
+                    date TEXT NOT NULL,
+                    ai_analysis TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            await db.execute("INSERT OR IGNORE INTO task_log_v4 SELECT * FROM task_log")
+            await db.execute("DROP TABLE IF EXISTS task_log")
+            await db.execute("ALTER TABLE task_log_v4 RENAME TO task_log")
+            await _set_schema_version(db, 4)
+            await db.commit()
+            import logging
+            logging.getLogger(__name__).info("Schema migrated to v4 (task_log CHECK widened)")
+            return
 
         await db.commit()
     finally:
@@ -318,5 +403,314 @@ async def prune_old_activity(days: int = 30) -> int:
         )
         await db.commit()
         return cursor.rowcount
+    finally:
+        await db.close()
+
+
+# ── Goals ────────────────────────────────────────────────────────────────
+
+
+async def insert_goal(
+    goal_type: str,
+    title: str,
+    description: str = "",
+    frequency: str = "daily",
+    custom_interval_days: Optional[int] = None,
+    target_days: Optional[int] = None,
+    progress_pct: float = 0.0,
+) -> int:
+    """Create a new goal. Returns the new goal id."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT INTO goals (type, title, description, frequency,
+               custom_interval_days, target_days, progress_pct)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (goal_type, title, description, frequency,
+             custom_interval_days, target_days, progress_pct),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def get_goal(goal_id: int) -> Optional[dict]:
+    """Return a single goal by id, or None if not found."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM goals WHERE id = ?", (goal_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_goals(
+    goal_type: Optional[str] = None,
+    archived: bool = False,
+    include_paused: bool = False,
+) -> list[dict]:
+    """List goals with optional type filter.
+
+    By default returns non-archived goals. Set archived=True to get only
+    archived goals, or set include_paused=True to include paused goals.
+    """
+    db = await get_db()
+    try:
+        conditions = ["archived = ?"]
+        params: list = [1 if archived else 0]
+        if goal_type:
+            conditions.append("type = ?")
+            params.append(goal_type)
+        if not include_paused:
+            conditions.append("paused = 0")
+
+        cursor = await db.execute(
+            f"SELECT * FROM goals WHERE {' AND '.join(conditions)} ORDER BY sort_order, created_at DESC",
+            params,
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def update_goal(goal_id: int, **kwargs) -> dict:
+    """Update one or more fields on a goal.
+
+    Accepted keyword arguments: type, title, description, frequency,
+    custom_interval_days, target_days, progress_pct, paused, archived,
+    sort_order.
+
+    Returns the updated goal dict.
+    """
+    allowed = {
+        "type", "title", "description", "frequency", "custom_interval_days",
+        "target_days", "progress_pct", "paused", "archived", "sort_order",
+    }
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        raise ValueError("No valid fields provided for update")
+
+    updates["updated_at"] = datetime.utcnow().isoformat()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [goal_id]
+
+    db = await get_db()
+    try:
+        await db.execute(
+            f"UPDATE goals SET {set_clause} WHERE id = ?", values
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+    result = await get_goal(goal_id)
+    if result is None:
+        raise ValueError(f"Goal {goal_id} not found after update")
+    return result
+
+
+async def archive_goal(goal_id: int) -> None:
+    """Soft-delete a goal by setting archived=1."""
+    await update_goal(goal_id, archived=1)
+
+
+# ── Tasks ────────────────────────────────────────────────────────────────
+
+
+async def insert_task(
+    goal_id: int,
+    title: str,
+    date_str: str,
+    description: str = "",
+    ai_suggested: int = 0,
+    parent_task_id: Optional[int] = None,
+) -> int:
+    """Create a new task. Returns the new task id."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT INTO tasks (goal_id, title, description, date,
+               ai_suggested, parent_task_id)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (goal_id, title, description, date_str, ai_suggested, parent_task_id),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def get_task(task_id: int) -> Optional[dict]:
+    """Return a single task by id, or None if not found."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_tasks_for_date(date_str: str, status: Optional[str] = None) -> list[dict]:
+    """Return all tasks for a given date, ordered by sort_order then created_at."""
+    db = await get_db()
+    try:
+        if status:
+            cursor = await db.execute(
+                "SELECT * FROM tasks WHERE date = ? AND status = ? ORDER BY sort_order, created_at",
+                (date_str, status),
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT * FROM tasks WHERE date = ? ORDER BY sort_order, created_at",
+                (date_str,),
+            )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_tasks_for_goal(goal_id: int) -> list[dict]:
+    """Return all tasks for a goal, newest first."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM tasks WHERE goal_id = ? ORDER BY date DESC, sort_order",
+            (goal_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def update_task(task_id: int, **kwargs) -> None:
+    """Update one or more fields on a task.
+
+    Accepted keyword arguments: title, description, status, date,
+    carry_over_count, sort_order.
+
+    Sets completed_at automatically when status='done'.
+    Sets updated_at automatically.
+    """
+    allowed = {"title", "description", "status", "date",
+               "carry_over_count", "sort_order"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        raise ValueError("No valid fields provided for update")
+
+    updates["updated_at"] = datetime.utcnow().isoformat()
+    if updates.get("status") == "done":
+        updates["completed_at"] = datetime.utcnow().isoformat()
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [task_id]
+
+    db = await get_db()
+    try:
+        await db.execute(
+            f"UPDATE tasks SET {set_clause} WHERE id = ?", values
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def get_overdue_tasks(date_str: str) -> list[dict]:
+    """Return tasks with date before given date and status pending or doing."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM tasks WHERE date < ? AND status IN ('pending', 'doing') "
+            "ORDER BY date ASC, sort_order",
+            (date_str,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_latest_task_for_goal(goal_id: int) -> Optional[dict]:
+    """Return the most recently created task for a goal, or None."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM tasks WHERE goal_id = ? ORDER BY created_at DESC LIMIT 1",
+            (goal_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_incomplete_tasks_before_date(goal_id: int, date_str: str) -> list[dict]:
+    """Return pending/doing tasks for a goal before a given date."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM tasks WHERE goal_id = ? AND date < ? "
+            "AND status IN ('pending', 'doing') ORDER BY date DESC",
+            (goal_id, date_str),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+# ── Task Log ─────────────────────────────────────────────────────────────
+
+
+async def insert_task_log(
+    task_id: int,
+    goal_id: int,
+    action: str,
+    date_str: str,
+    ai_analysis: Optional[str] = None,
+) -> int:
+    """Log an action on a task. Returns the new log id."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO task_log (task_id, goal_id, action, date, ai_analysis) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (task_id, goal_id, action, date_str, ai_analysis),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def get_task_log_for_goal(goal_id: int, limit: int = 50) -> list[dict]:
+    """Return task log entries for a goal, newest first."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM task_log WHERE goal_id = ? ORDER BY created_at DESC LIMIT ?",
+            (goal_id, limit),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_task_log_for_date(date_str: str) -> list[dict]:
+    """Return task log entries for a specific date."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM task_log WHERE date = ? ORDER BY created_at DESC",
+            (date_str,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
     finally:
         await db.close()

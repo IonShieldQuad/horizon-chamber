@@ -1,7 +1,7 @@
 # 需求 AI 对话记录
 
 - 线程: thr_25e0z8hu
-- 更新时间: 2026-06-21T16:39:48.157Z
+- 更新时间: 2026-06-21T21:14:40.163Z
 
 ---
 
@@ -587,3 +587,52 @@ Found it — **Bug #1: Missing `import os` in `desktop_app.py`**. Let me check t
 I found the three bugs. Let me confirm the severity of each:
 
 > [工具] bash
+
+---
+
+## 用户
+
+Generate implementation plan
+
+> [工具] read
+
+> [工具] find
+
+> [工具] find
+
+> [工具] ls
+
+> [工具] ls
+
+> [工具] ls
+
+> [工具] read
+
+> [工具] read（error）
+
+> [工具] read
+
+## 需求 AI
+
+Now I have the full picture. The requirement draft (which references a goals/kanban doc that doesn't exist separately) is effectively about fixing the 3 bugs uncovered in the code review of the completed v0.2 implementation. Let me create the plan.
+
+> [工具] Create plan
+
+## 需求 AI
+
+The plan has been saved to `.kunsdd/plan/sdd-ce2f15a0-9dcb-4c90-a6e6-1c0dfea7dcd9.md`. Here's the summary:
+
+## Plan Summary: 3 Critical Bug Fixes
+
+**Priority order** (highest value-per-effort first):
+
+### Step 1 — B-1: Missing `import os` (`desktop_app.py`) ~2 min
+**P0 — Launch-Blocking.** Crash on startup. Simply add `import os` to the top-level imports.
+
+### Step 2 — B-2: Sunrise trigger infinite loop (`main.py`) ~5 min
+**P1 — Launch-Blocking.** Every 15s frontend poll re-triggers the 60-second sunrise sequence forever. Fix: call `scheduler.consume_sunrise_trigger()` in the API route so the flag returns `False` after the first read.
+
+### Step 3 — B-3: Data race on `_last_app` (`monitor.py`) ~8 min
+**P1 — Fast-Follow.** Reads `_last_app` outside the lock but writes it inside. Fix: move the entire time-block management code into the `async with _lock:` block.
+
+Each step has a concrete test/verification step. Review the saved plan for full details.

@@ -29,10 +29,10 @@ html, body {
 
 /* ── Glassmorphism overlay panels ────────────────────── */
 .glass {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 16px;
   padding: 16px 20px;
   position: relative;
@@ -172,13 +172,13 @@ html, body {
   text-align: center;
 }
 
-.card-column.column-now    { background: rgba(255, 215, 0, 0.06); }
-.card-column.column-later  { background: rgba(74, 144, 226, 0.06); }
-.card-column.column-trash  { background: rgba(160, 160, 160, 0.06); }
+.card-column.column-now    { background: rgba(255, 215, 0, 0.10); }
+.card-column.column-later  { background: rgba(74, 144, 226, 0.10); }
+.card-column.column-trash  { background: rgba(160, 160, 160, 0.10); }
 
 .chaos-card {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.11);
+  border: 1px solid rgba(255,255,255,0.18);
   border-radius: 10px;
   padding: 10px 12px;
   margin-bottom: 8px;
@@ -203,7 +203,8 @@ html, body {
 /* ── Sunrise button (fixed bottom-right) ─────────────── */
 #sunrise-btn {
   position: fixed;
-  bottom: 30px;
+  bottom: auto;
+  top: 90px;
   right: 30px;
   z-index: 20;
   background: rgba(255, 215, 0, 0.12);
@@ -231,7 +232,8 @@ html, body {
 /* ── Sunrise settings panel ──────────────────────────── */
 #sunrise-settings {
   position: fixed;
-  bottom: 85px;
+  bottom: auto;
+  top: 140px;
   right: 30px;
   z-index: 19;
   min-width: 200px;
@@ -288,8 +290,9 @@ html, body {
 /* Gear icon next to sunrise button */
 #sunrise-gear {
   position: fixed;
-  bottom: 38px;
-  right: 140px;
+  bottom: auto;
+  top: 98px;
+  right: 155px;
   z-index: 21;
   background: transparent;
   border: none;
@@ -453,7 +456,9 @@ html, body {
 @media (max-width: 600px) {
   #cards-container { flex-direction: column; }
   #bottom-section { bottom: 20px; width: 95vw; }
-  #sunrise-btn { bottom: 20px; right: 20px; font-size: 0.8rem; padding: 10px 14px; }
+  #sunrise-btn { top: auto; bottom: 20px; right: 20px; font-size: 0.8rem; padding: 10px 14px; }
+  #sunrise-gear { top: auto; bottom: 28px; right: 120px; }
+  #sunrise-settings { top: auto; bottom: 70px; right: 20px; }
   #top-bar { top: 12px; width: 95vw; }
   #today-panel { display: none !important; }
 }
@@ -476,16 +481,206 @@ html, body {
   .focus-bar-fill { transition: none; }
 }
 
+/* ── Today list view ──────────────────────────────────── */
+#today-list-view {
+  display: none; position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
+  width: min(600px, 90vw); z-index: 5; max-height: calc(100vh - 180px); overflow-y: auto;
+  padding: 16px 20px;
+}
+#today-list-view.visible { display: block; }
+#today-list-view h2 { font-size: 0.9rem; font-weight: 500; opacity: 0.6; margin-bottom: 12px; }
+#today-list-view ol { list-style: decimal inside; padding: 0; }
+#today-list-view li {
+  padding: 8px 10px; margin-bottom: 4px; border-radius: 8px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer; transition: background 0.2s; font-size: 0.9rem;
+}
+#today-list-view li:hover { background: rgba(255,255,255,0.08); }
+#today-list-view li .list-checkbox { margin-right: 10px; cursor: pointer; }
+#today-list-view li.done { opacity: 0.4; text-decoration: line-through; }
+#today-list-view .list-meta { font-size: 0.7rem; opacity: 0.4; margin-left: 24px; }
+#today-list-view .toggle-btn {
+  background: transparent; border: 1px solid rgba(255,255,255,0.15);
+  color: #e0e0e0; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
+  margin-bottom: 12px; transition: background 0.2s;
+}
+#today-list-view .toggle-btn:hover { background: rgba(255,255,255,0.1); }
 /* ── Sunrise active — darken glass / cards so text stays readable ── */
 body.sunrise-active .glass {
-  background: rgba(0, 0, 0, 0.6) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
 }
 body.sunrise-active .chaos-card {
-  background: rgba(0, 0, 0, 0.6) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
 }
 body.sunrise-active #today-panel {
-  background: rgba(0, 0, 0, 0.6) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
 }
+
+/* ── Kanban Board ──────────────────────────────────────── */
+#kanban-board {
+  position: fixed; top: 140px; left: 50%; transform: translateX(-50%);
+  width: min(1400px, 95vw); height: calc(100vh - 300px);
+  z-index: 5; display: none; gap: 8px; padding: 12px;
+  overflow-x: auto; overflow-y: hidden;
+}
+#kanban-board.visible { display: flex; }
+.kanban-column {
+  flex: 1; min-width: 180px; max-width: 280px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px; padding: 10px;
+  display: flex; flex-direction: column; max-height: 100%;
+}
+.kanban-column-header {
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+  opacity: 0.5; margin-bottom: 10px; text-align: center;
+  padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.kanban-cards {
+  flex: 1; overflow-y: auto; min-height: 60px; padding: 2px;
+}
+.kanban-cards::-webkit-scrollbar { width: 3px; }
+.kanban-cards::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.goal-card {
+  background: rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+  font-size: 0.85rem; cursor: grab;
+  transition: transform 0.15s, opacity 0.2s, box-shadow 0.15s;
+  position: relative;
+}
+.goal-card:active { cursor: grabbing; transform: scale(0.97); }
+.goal-card.dragging { opacity: 0.5; }
+.goal-card.done { opacity: 0.4; text-decoration: line-through; border-color: rgba(100,255,100,0.2); }
+.goal-card.overdue { border-left: 3px solid #ff6b6b; }
+.goal-card.type-long_term { border-left: 3px solid #4A90E2; }
+.goal-card.type-habit { border-left: 3px solid #4CAF50; }
+.goal-card.type-maintenance { border-left: 3px solid #FF9800; }
+.goal-card.color-blue { border-left-color: #4A90E2; }
+.goal-card.color-green { border-left-color: #4CAF50; }
+.goal-card.color-orange { border-left-color: #FF9800; }
+.goal-card.color-purple { border-left-color: #9C27B0; }
+.goal-card.color-gold { border-left-color: #FFD700; }
+.goal-card.color-red { border-left-color: #f44336; }
+.goal-card.color-teal { border-left-color: #009688; }
+.goal-card.color-pink { border-left-color: #e91e63; }
+.card-edit-input {
+  width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px; color: #e0e0e0; font-size: 0.85rem;
+  font-family: inherit; padding: 4px 6px; outline: none; margin-bottom: 4px;
+}
+.goal-card .card-meta { font-size: 0.65rem; opacity: 0.4; margin-top: 4px; }
+.goal-card .card-actions { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; }
+.goal-card .btn-split, .goal-card .btn-edit {
+  background: transparent; border: none; color: rgba(255,255,255,0.3);
+  font-size: 0.75rem; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+}
+.goal-card .btn-split:hover, .goal-card .btn-edit:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.1); }
+.kanban-column.drag-over { background: rgba(255,255,255,0.08); outline: 2px dashed rgba(255,255,255,0.2); outline-offset: -2px; }
+
+/* ── Bottom strip (inbox / trash / capture) ────────────── */
+#bottom-strip {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: min(1400px, 95vw); z-index: 5;
+  display: none; flex-direction: row; gap: 10px; padding: 10px 12px;
+  border-radius: 16px 16px 0 0;
+}
+#bottom-strip.visible { display: flex; }
+.bottom-zone {
+  flex: 1; min-height: 60px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  background: rgba(255,255,255,0.03); border-radius: 10px;
+  border: 1px dashed rgba(255,255,255,0.08); padding: 8px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.bottom-zone:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); }
+.bottom-zone .zone-icon { font-size: 1.3rem; opacity: 0.7; }
+.bottom-zone .zone-label { font-size: 0.7rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.05em; }
+.inbox-stack { position: relative; width: 100%; min-height: 50px; }
+.inbox-shadow {
+  position: absolute; top: 8px; left: 8px; right: 4px; bottom: -4px;
+  background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.06);
+  border-radius: 10px;
+}
+.inbox-shadow + .inbox-shadow { top: 4px; left: 4px; right: 8px; bottom: 0; }
+.inbox-blank {
+  position: relative; z-index: 1; background: rgba(255,255,255,0.04) !important;
+  border: 1px dashed rgba(255,255,255,0.15) !important; border-radius: 10px;
+  opacity: 0.7; cursor: grab; margin-bottom: 0 !important; min-height: 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+.inbox-blank:hover { opacity: 1; background: rgba(255,255,255,0.07) !important; }
+.inbox-blank .card-title { opacity: 0.5; font-style: italic; font-size: 0.8rem; }
+#zone-capture {
+  flex: 2; flex-direction: row; gap: 8px; padding: 6px 10px;
+}
+#zone-capture textarea {
+  flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; color: #e0e0e0; font-size: 0.85rem;
+  font-family: inherit; padding: 6px 8px; resize: none; outline: none; min-height: 32px;
+}
+#zone-capture textarea:focus { border-color: rgba(255,255,255,0.25); }
+#zone-capture .btn-sm { font-size: 0.8rem; padding: 6px 12px; white-space: nowrap; }
+
+/* ── Stats column ──────────────────────────────────────── */
+.stats-column { min-width: 140px; max-width: 200px; font-size: 0.8rem; }
+.stat-item { margin-bottom: 8px; }
+.stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.4; }
+.stat-value { font-size: 1.1rem; font-weight: 500; }
+.nudge-text {
+  font-size: 0.75rem; padding: 8px; border-radius: 8px;
+  background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.15);
+  margin-bottom: 8px; line-height: 1.4;
+}
+.nudge-text.alert { background: rgba(255,100,100,0.08); border-color: rgba(255,100,100,0.2); }
+.nudge-text.suggestion { background: rgba(100,200,255,0.08); border-color: rgba(100,200,255,0.2); }
+.nudge-dismiss { float: right; background: transparent; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 0.8rem; padding: 0 4px; }
+
+/* ── Chaos inbox strip ─────────────────────────────────── */
+#chaos-strip { display: block; flex-shrink: 0; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+#chaos-strip .chaos-toggle { font-size: 0.75rem; cursor: pointer; opacity: 0.5; padding: 4px 0; }
+#chaos-strip .chaos-toggle:hover { opacity: 0.8; }
+#chaos-strip .chaos-body { display: none; margin-top: 6px; }
+#chaos-strip .chaos-body.open { display: flex; gap: 8px; align-items: center; }
+#chaos-strip textarea {
+  flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; color: #e0e0e0; font-size: 0.85rem;
+  font-family: inherit; padding: 8px 10px; resize: none; outline: none; min-height: 36px; max-height: 60px;
+}
+#chaos-strip textarea:focus { border-color: rgba(255,255,255,0.3); }
+#chaos-strip .btn-sm { font-size: 0.8rem; padding: 8px 14px; }
+
+/* ── Quick-add inline ─────────────────────────────────── */
+.quick-add-area { flex-shrink: 0; padding: 4px 2px; }
+.quick-add-btn {
+  width: 100%; text-align: left; opacity: 0.4; cursor: pointer;
+  font-size: 0.8rem; padding: 6px 8px; border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,0.15); background: transparent; color: #e0e0e0;
+}
+.quick-add-btn:hover { opacity: 0.7; background: rgba(255,255,255,0.05); }
+.quick-add-input { display: none; width: 100%; }
+.quick-add-input.open { display: block; }
+.quick-add-input input {
+  width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px; color: #e0e0e0; font-size: 0.85rem;
+  font-family: inherit; padding: 6px 10px; outline: none;
+}
+
+/* ── Toast ─────────────────────────────────────────────── */
+#toast-container { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 6px; }
+.toast {
+  background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+  padding: 10px 16px; font-size: 0.85rem; color: #e0e0e0;
+  display: flex; gap: 12px; align-items: center;
+  animation: toast-in 0.3s ease;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.toast .toast-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #e0e0e0; font-size: 0.8rem; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.toast .toast-btn:hover { background: rgba(255,255,255,0.2); }
+.loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #e0e0e0; border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -508,17 +703,81 @@ body.sunrise-active #today-panel {
   </div>
 </div>
 
-<!-- Bottom section: Chaos Tamer -->
-<div id="bottom-section" class="glass">
-  <div id="chaos-input-area">
-    <textarea id="chaos-textarea" rows="2" placeholder="Paste your chaos here... (tabs, URLs, random thoughts)"></textarea>
-    <button class="btn" id="tame-btn">Tame the Chaos</button>
-  </div>
-  <div id="error-banner"></div>
-  <div id="loading-text">Classifying...</div>
-  <div id="cards-container"></div>
+<!-- Today List View (simplified) -->
+<div id="today-list-view" class="glass">
+  <button class="toggle-btn" onclick="toggleListView()">&larr; Back to Board</button>
+  <h2>Today&#8217;s Tasks</h2>
+  <ol id="today-list-items"></ol>
 </div>
 
+<!-- Kanban Board -->
+<div id="kanban-board" class="glass">
+  <div id="chaos-strip">
+    <div class="chaos-toggle" onclick="document.querySelector('#chaos-strip .chaos-body').classList.toggle('open')">Capture thoughts...</div>
+    <div class="chaos-body">
+      <textarea id="chaos-textarea2" rows="1" placeholder="Ideas, URLs, notes..."></textarea>
+      <button class="btn btn-sm" id="tame-btn2">Tame</button>
+    </div>
+    <div id="chaos-result-area"></div>
+  </div>
+  <div class="kanban-column" data-status="today">
+    <div class="kanban-column-header">Today</div>
+    <div class="kanban-cards" id="col-today" ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')"></div>
+    <div class="quick-add-area">
+      <button class="quick-add-btn" id="add-task-btn">+ Task</button>
+      <div class="quick-add-input"><input type="text" id="quick-task-input" placeholder="Task title..." /></div>
+    </div>
+  </div>
+  <div class="kanban-column" data-status="doing">
+    <div class="kanban-column-header">Doing</div>
+    <div class="kanban-cards" id="col-doing" ondragover="allowDrop(event)" ondrop="dropTask(event,'doing')"></div>
+  </div>
+  <div class="kanban-column" data-status="done">
+    <div class="kanban-column-header">Done</div>
+    <div class="kanban-cards" id="col-done" ondragover="allowDrop(event)" ondrop="dropTask(event,'done')"></div>
+  </div>
+  <div class="kanban-column" data-status="overdue">
+    <div class="kanban-column-header">Overdue</div>
+    <div class="kanban-cards" id="col-overdue" ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')"></div>
+  </div>
+  <div class="kanban-column stats-column">
+    <div class="kanban-column-header">Stats</div>
+    <div id="stats-content"></div>
+    <div class="quick-add-area" style="margin-top:8px">
+      <button class="quick-add-btn" id="add-goal-btn" style="text-align:center">+ New Goal</button>
+      <div class="quick-add-input"><input type="text" id="quick-goal-input" placeholder="Goal title..." /></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom strip: inbox, trash, capture -->
+<div id="bottom-strip" class="glass">
+  <div class="bottom-zone" id="zone-inbox"
+       ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')">
+    <div class="zone-label" style="margin-bottom:4px">📥 New Cards</div>
+    <div class="inbox-stack" id="inbox-stack">
+      <div class="inbox-shadow"></div>
+      <div class="inbox-shadow"></div>
+      <div id="inbox-card" class="goal-card inbox-blank" draggable="true"
+           ondragstart="dragNewCard(event)" ondragend="onInboxDragEnd(event)">
+        <div class="card-title">New card</div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-zone" id="zone-trash"
+       ondragover="allowDrop(event)" ondrop="trashTask(event)">
+    <div class="zone-icon">🗑️</div>
+    <div class="zone-label">Trash</div>
+  </div>
+  <div class="bottom-zone" id="zone-capture">
+    <div class="zone-icon">💭</div>
+    <textarea id="capture-input" rows="1" placeholder="Quick thought..."></textarea>
+    <button class="btn btn-sm" onclick="captureThought()">Tame</button>
+  </div>
+</div>
+
+<div id="error-banner"></div>
+<div id="toast-container"></div>
 <!-- Sunrise button -->
 <button id="sunrise-btn">☀️ Start Sunrise</button>
 
@@ -561,7 +820,7 @@ const STAR_COUNT = 200;
 const MAX_FRAME_MS = 50;   // if frame takes >50ms, reduce particle count
 
 // Current canvas background color (RGB)
-let bgColor = { r: 0, g: 0, b: 0 };
+let bgColor = { r: 10, g: 10, b: 15 };
 let targetColor = { r: 10, g: 10, b: 15 };  // fallback #0a0a0f
 
 // Sunrise state
@@ -791,7 +1050,7 @@ function hideError() {
   errorBanner.style.display = 'none';
 }
 
-tameBtn.addEventListener('click', async () => {
+if (tameBtn) tameBtn.addEventListener('click', async () => {
   hideError();
   const raw = textarea.value.trim();
   if (!raw) {
@@ -1361,6 +1620,276 @@ function startAutoSunrisePolling() {
    INIT
    ═══════════════════════════════════════════════════════════ */
 
+
+// KANBAN BOARD FUNCTIONS
+async function fetchBoard() {
+  try { const r = await fetch('/api/board'); return r.ok ? await r.json() : null; } catch(e) { return null; }
+}
+function escapeHtml(s) {
+  var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+function renderKanban(board) {
+  if (!board) return;
+  var cols = {today:'col-today',doing:'col-doing',done:'col-done',overdue:'col-overdue'};
+  for (var k in cols) {
+    var col = document.getElementById(cols[k]); if (!col) continue;
+    var cards = board.columns[k] || [];
+    col.innerHTML = cards.map(function(t) {
+      var color = localStorage.getItem('card_color_'+t.id) || '';
+      var cls = 'goal-card' + (t.status==='done'?' done':'') + (t.goal_type?' type-'+t.goal_type:'') + (color?' color-'+color:'');
+      var meta = t.goal_title ? '<div class="card-meta">'+escapeHtml(t.goal_title)+'</div>' : '';
+      var actions = '<span class="card-actions">' +
+        '<button class="btn-split" title="Color" onclick="event.stopPropagation();cycleCardColor(event,'+t.id+')">🎨</button>' +
+        '<button class="btn-split" title="Split" onclick="event.stopPropagation();splitTask('+t.id+')">✂</button>' +
+        '</span>';
+      return '<div class="'+cls+'" draggable="true" data-task-id="'+t.id+'" data-status="'+t.status+'" ondragstart="dragTask(event,'+t.id+',&quot;'+t.status+'&quot;)" onclick="editCard(event,'+t.id+')">'+actions+'<div class="card-title">'+escapeHtml(t.title)+'</div>'+meta+'</div>';
+    }).join('');
+  }
+  var statsEl = document.getElementById('stats-content');
+  if (statsEl && board.stats) {
+    var s = board.stats;
+    var h = '<div class="stat-item"><div class="stat-label">Done</div><div class="stat-value">'+s.done+'/'+s.total_tasks+'</div></div>';
+    h += '<div class="stat-item"><div class="stat-label">Rate</div><div class="stat-value">'+s.completion_rate+'%</div></div>';
+    statsEl.innerHTML = h;
+  }
+  document.getElementById('kanban-board').classList.add('visible');
+  var strip = document.getElementById('bottom-strip');
+  if (strip) strip.classList.add('visible');
+}
+async function editCard(e, id) {
+  var card = e.currentTarget;
+  var titleEl = card.querySelector('.card-title');
+  if (!titleEl || card.querySelector('input')) return;
+  var inp = document.createElement('input');
+  inp.className = 'card-edit-input';
+  inp.value = titleEl.textContent;
+  inp.onblur = function() { saveCardTitle(id, inp.value, card, titleEl); };
+  inp.onkeydown = function(ev) {
+    if (ev.key==='Enter') { ev.preventDefault(); inp.blur(); }
+    if (ev.key==='Escape') { titleEl.style.display=''; inp.remove(); }
+  };
+  titleEl.style.display = 'none';
+  card.insertBefore(inp, titleEl);
+  inp.focus(); inp.select();
+}
+function saveCardTitle(id, newTitle, card, titleEl) {
+  var inp = card.querySelector('input');
+  if (!inp) return;
+  var title = inp.value.trim() || titleEl.textContent;
+  inp.remove(); titleEl.style.display = ''; titleEl.textContent = title;
+  fetch('/api/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:title})}).then(function(){refreshBoard();}).catch(function(){});
+}
+var CARD_COLORS = ['blue','green','orange','purple','gold','red','teal','pink'];
+function cycleCardColor(e, id) {
+  e.stopPropagation();
+  var cur = localStorage.getItem('card_color_'+id) || '';
+  var idx = CARD_COLORS.indexOf(cur);
+  localStorage.setItem('card_color_'+id, CARD_COLORS[(idx+1)%CARD_COLORS.length]);
+  refreshBoard();
+}
+async function splitTask(id) {
+  try { var r = await fetch('/api/tasks/'+id+'/split',{method:'POST'}); if(r.ok){showToast('Split!');refreshBoard();} else {showToast('AI not available');} } catch(e) {}
+}
+async function refreshBoard() {
+  var board = await fetchBoard();
+  if (board) {
+    try { board.analysis = await (await fetch('/api/analysis')).json(); } catch(e) {}
+  }
+  renderKanban(board);
+}
+// ── Drag-and-drop between kanban columns ───────────────
+var dragData = null;
+function dragTask(e, taskId, status) {
+  dragData = { id: taskId, from: status };
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(taskId));
+}
+async function dragNewCard(e) {
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', 'new');
+  try {
+    var gr = await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'New card',type:'long_term'})});
+    if(gr.ok){
+      var goal = await gr.json();
+      var tr = await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal_id:goal.id,title:'New card'})});
+      if(tr.ok){ var task = await tr.json(); dragData = { id: task.id, from: 'inbox', newCard: true }; }
+    }
+  } catch(e) {}
+}
+function onInboxDragEnd(e) {
+  if (dragData && dragData.newCard && !dragData.consumed) {
+    fetch('/api/tasks/'+dragData.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'skipped'})}).catch(function(){});
+  }
+  dragData = null;
+  renderInboxCard();
+}
+function renderInboxCard() {
+  var s = document.getElementById('inbox-stack');
+  if(!s) return;
+  s.innerHTML = '<div class="inbox-shadow"></div><div class="inbox-shadow"></div>' +
+    '<div id="inbox-card" class="goal-card inbox-blank" draggable="true" ' +
+    'ondragstart="dragNewCard(event)" ondragend="onInboxDragEnd(event)">' +
+    '<div class="card-title">New card</div></div>';
+}
+function allowDrop(e) { e.preventDefault(); }
+async function dropTask(e, newStatus) {
+  e.preventDefault();
+  if (!dragData) return;
+  var taskId = dragData.id;
+  var fromStatus = dragData.from;
+  dragData.consumed = true;
+  try {
+    var dropPayload = {status: newStatus};
+    // When dropping to Today (pending) or Doing, also carry the task to today's date
+    if (newStatus === 'pending' || newStatus === 'doing') {
+      var d = new Date();
+      var y = d.getFullYear();
+      var m = String(d.getMonth()+1).padStart(2,'0');
+      var day = String(d.getDate()).padStart(2,'0');
+      dropPayload.date = y+'-'+m+'-'+day;
+    }
+    await fetch('/api/tasks/'+taskId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(dropPayload)});
+    refreshBoard();
+  } catch(err) { console.warn('Drop failed:', err); }
+  dragData = null;
+}
+async function trashTask(e) {
+  e.preventDefault();
+  if (!dragData) return;
+  dragData.consumed = true;
+  var taskId = dragData.id;
+  try {
+    await fetch('/api/tasks/'+taskId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'skipped'})});
+    showToast('Trashed!');
+    refreshBoard();
+  } catch(err) { console.warn('Trash failed:', err); }
+  dragData = null;
+}
+async function captureThought() {
+  var inp = document.getElementById('capture-input');
+  if (!inp || !inp.value.trim()) return;
+  try {
+    var r = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:inp.value.trim()})});
+    if(r.ok){inp.value='';showToast('Tamed!');refreshBoard();} else {showToast('AI failed');}
+  } catch(e) { showToast('Failed'); }
+}
+function showToast(msg, undoCallback) {
+  var c = document.getElementById('toast-container'); if(!c) return;
+  var t = document.createElement('div'); t.className='toast';
+  t.innerHTML = '<span>' + escapeHtml(msg) + '</span>';
+  if (undoCallback) {
+    var btn = document.createElement('button');
+    btn.className = 'toast-btn';
+    btn.textContent = 'Undo';
+    btn.onclick = function() { undoCallback(); t.remove(); };
+    t.appendChild(btn);
+  }
+  c.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(function(){t.remove();},300); }, 4000);
+}
+
+// TODAY LIST VIEW
+function toggleListView() {
+  var board = document.getElementById('kanban-board');
+  var list = document.getElementById('today-list-view');
+  board.classList.toggle('visible');
+  list.classList.toggle('visible');
+  if (list.classList.contains('visible')) refreshListView();
+}
+async function refreshListView() {
+  try {
+    var r = await fetch('/api/today');
+    if (!r.ok) return;
+    var data = await r.json();
+    var ol = document.getElementById('today-list-items');
+    ol.innerHTML = '';
+    if (data.tasks && data.tasks.length > 0) {
+      data.tasks.forEach(function(t) {
+        var li = document.createElement('li');
+        li.className = t.status === 'done' ? 'done' : '';
+        li.innerHTML = '<span class="list-checkbox" onclick="event.stopPropagation();toggleListItem(' + t.id + ',this)">' + (t.status === 'done' ? '&#x2611;' : '&#x2610;') + '</span>' + escapeHtml(t.title) + '<div class="list-meta">' + (t.goal_title ? escapeHtml(t.goal_title) + ' &middot; ' : '') + t.status + '</div>';
+        li.onclick = function() { toggleListItem(t.id, this.querySelector('.list-checkbox')); };
+        ol.appendChild(li);
+      });
+    } else {
+      ol.innerHTML = '<li style="opacity:0.4;list-style:none">No tasks for today. Create a goal!</li>';
+    }
+  } catch(e) {}
+}
+async function toggleListItem(taskId, checkboxEl) {
+  try {
+    var isDone = checkboxEl.innerHTML.indexOf('2611') >= 0;
+    var newStatus = isDone ? 'pending' : 'done';
+    await fetch('/api/tasks/' + taskId, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})});
+    refreshListView();
+    refreshBoard();
+  } catch(e) {}
+}
+
+// Add list view icon to the top bar
+document.addEventListener('DOMContentLoaded', function() {
+  var h1 = document.querySelector('#top-bar h1');
+  if (h1) {
+    var viewToggle = document.createElement('span');
+    viewToggle.style.cssText = 'cursor:pointer;margin-left:8px;opacity:0.5;font-size:0.9rem;';
+    viewToggle.innerHTML = '&#x1f4cb;';
+    viewToggle.title = 'Toggle list view';
+    viewToggle.onclick = toggleListView;
+    h1.appendChild(viewToggle);
+  }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  var addTaskBtn = document.getElementById('add-task-btn');
+  if (addTaskBtn) {
+    addTaskBtn.addEventListener('click', function() {
+      document.getElementById('quick-task-input').parentElement.classList.toggle('open');
+      document.getElementById('quick-task-input').focus();
+    });
+  }
+  var inp = document.getElementById('quick-task-input');
+  if (inp) {
+    inp.addEventListener('keydown', async function(e) {
+      if (e.key==='Enter' && this.value.trim()) {
+        try {
+          await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:this.value.trim(),type:'long_term'})});
+          this.value=''; this.parentElement.classList.remove('open'); showToast('Created!'); refreshBoard();
+        } catch(e) { showToast('Failed'); }
+      }
+    });
+  }
+  var addGoalBtn = document.getElementById('add-goal-btn');
+  if (addGoalBtn) {
+    addGoalBtn.addEventListener('click', function() {
+      document.getElementById('quick-goal-input').parentElement.classList.toggle('open');
+      document.getElementById('quick-goal-input').focus();
+    });
+  }
+  var inp2 = document.getElementById('quick-goal-input');
+  if (inp2) {
+    inp2.addEventListener('keydown', async function(e) {
+      if (e.key==='Enter' && this.value.trim()) {
+        try {
+          await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:this.value.trim()})});
+          this.value=''; this.parentElement.classList.remove('open'); showToast('Goal created!'); refreshBoard();
+        } catch(e) { showToast('Failed'); }
+      }
+    });
+  }
+  var tameBtn = document.getElementById('tame-btn2');
+  if (tameBtn) {
+    tameBtn.addEventListener('click', async function() {
+      var ta = document.getElementById('chaos-textarea2');
+      if (!ta.value.trim()) return;
+      try {
+        var r = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:ta.value.trim()})});
+        if(r.ok){ta.value='';showToast('Classified!');refreshBoard();}
+      } catch(e){showToast('Failed');}
+    });
+  }
+  refreshBoard();
+  setInterval(refreshBoard, 30000);
+});
 document.addEventListener('DOMContentLoaded', async () => {
   resizeCanvas();
   initStars(currentStarCount);
