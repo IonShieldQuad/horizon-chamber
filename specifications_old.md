@@ -1,4 +1,8 @@
-# Horizon Chamber - Project Specifications
+# Horizon Chamber - Project Specifications (Archived)
+
+> **⚠️ Historical document — this describes the original v0.1 MVP concept.**
+> The "Chaos Tamer" feature has since evolved into the kanban board's **Capture & Sort** system.
+> See [`specifications.md`](specifications.md) and [`readme.md`](readme.md) for current documentation.
 
 ## 1. Project Overview
 **Name:** Horizon Chamber (v0.1 MVP)

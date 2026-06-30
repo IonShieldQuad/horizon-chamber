@@ -1,13 +1,15 @@
-"""In-memory sunrise scheduler for Horizon Chamber.
+"""Sunrise scheduler for Horizon Chamber.
 
-Stores the user's auto-sunrise schedule in a simple dict so it resets
-on server restart — acceptable for v0.1 MVP.
+Stores the user's auto-sunrise schedule in memory and persists it
+to the DB so it survives server restarts.
 """
 
 import asyncio
 import logging
 from datetime import date, datetime
 from typing import Optional
+
+import db  # lazy-imported in load_from_db / set_schedule to avoid circular import
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,33 @@ _schedule: dict = {
     "sunrise_triggered": False,   # set True when time matches; poller consumes it
     "last_triggered_date": None,  # ISO date string to avoid re-triggering same day
 }
+
+
+# ── DB persistence ────────────────────────────────────────────────────────
+
+async def load_from_db() -> None:
+    """Load the persisted schedule from DB into the in-memory dict."""
+    try:
+        cfg = await db.get_sunrise_config()
+        _schedule["enabled"] = cfg["enabled"]
+        _schedule["time"] = cfg["time"]
+        _schedule["last_triggered_date"] = cfg["last_triggered_date"]
+        _schedule["sunrise_triggered"] = False
+        logger.info("Sunrise schedule loaded from DB: enabled=%s time=%s", cfg["enabled"], cfg["time"])
+    except Exception as exc:
+        logger.warning("Could not load sunrise schedule from DB, using defaults: %s", exc)
+
+
+async def _persist() -> None:
+    """Write current schedule to DB."""
+    try:
+        await db.save_sunrise_config(
+            enabled=_schedule["enabled"],
+            time=_schedule["time"],
+            last_triggered_date=_schedule["last_triggered_date"],
+        )
+    except Exception as exc:
+        logger.warning("Could not persist sunrise schedule: %s", exc)
 
 
 # ── Public API (called by route handlers) ────────────────────────────────
@@ -56,6 +85,8 @@ def set_schedule(enabled: bool, time: str) -> None:
     _schedule["sunrise_triggered"] = False
     _schedule["last_triggered_date"] = None
     logger.info("Sunrise schedule updated: enabled=%s time=%s", enabled, time)
+    # Fire-and-forget persist — schedules run in the background loop anyway
+    asyncio.ensure_future(_persist())
 
 
 def consume_sunrise_trigger() -> bool:
@@ -92,6 +123,8 @@ async def _check_schedule_loop(interval: float = 30.0) -> None:
                 ):
                     _schedule["sunrise_triggered"] = True
                     _schedule["last_triggered_date"] = today_str
+                    # Persist the updated last_triggered_date so it survives restart
+                    asyncio.ensure_future(_persist())
                     logger.info(
                         "Sunrise triggered at scheduled time %s", _schedule["time"]
                     )

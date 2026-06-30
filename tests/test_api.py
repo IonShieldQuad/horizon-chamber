@@ -10,9 +10,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-# Ensure the project root is on sys.path so we can import app modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 # Set test environment before importing app modules
 os.environ.setdefault("DEEPSEEK_API_KEY", "test-key-123")
 os.environ["DATABASE_PATH"] = os.path.join(tempfile.gettempdir(), "horizon_test.db")

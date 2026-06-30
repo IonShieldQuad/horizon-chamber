@@ -7,18 +7,43 @@
 <link rel="icon" type="image/png" href="/static/favicon.png">
 <link rel="shortcut icon" type="image/x-icon" href="/static/horizon_icon.ico">
 <style>
-/* ── Reset & Base ────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --zone-bg: rgba(10, 10, 17, 0.65);
+  --zone-border: rgba(255, 255, 255, 0.08);
+  --tab-active-bg: rgba(255, 255, 255, 0.10);
+  --tab-hover-bg: rgba(255, 255, 255, 0.05);
+  --tab-inactive: rgba(255, 255, 255, 0.35);
+  --text-primary: #e0e0e0;
+  --text-muted: rgba(255, 255, 255, 0.45);
+  --accent-gold: #FFD700;
+  --accent-blue: #4A90E2;
+  --accent-green: #4CAF50;
+  --accent-orange: #FF9800;
+  --accent-red: #f44336;
+  --radius-lg: 12px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
 
 html, body {
   width: 100%; height: 100%;
   overflow: hidden;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color: #e0e0e0;
+  font-family: var(--font);
+  color: var(--text-primary);
   background: #0a0a0f;
 }
 
-/* ── Canvas (behind everything) ──────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   CANVAS (behind everything)
+   ═══════════════════════════════════════════════════════════ */
 #nebula {
   position: fixed;
   top: 0; left: 0;
@@ -27,536 +52,296 @@ html, body {
   display: block;
 }
 
-/* ── Glassmorphism overlay panels ────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   ZONE LAYOUT — 4 corners around center canvas
+   ═══════════════════════════════════════════════════════════ */
+.zone {
+  position: fixed;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--zone-bg);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  border: 1px solid var(--zone-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              max-width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Zone positions */
+.zone.zone-tl { top: 12px; left: 12px; width: 380px; max-height: 42vh; }
+.zone.zone-tr { top: 12px; right: 12px; width: 320px; max-height: 42vh; }
+.zone.zone-bl { bottom: 12px; left: 12px; width: min(650px, 60vw); max-height: 48vh; }
+.zone.zone-br { bottom: 12px; right: 12px; width: 340px; max-height: 48vh; }
+
+/* Zone collapse */
+.zone.collapsed {
+  max-height: 34px !important;
+  overflow: hidden;
+}
+.zone.collapsed .zone-content,
+.zone.collapsed .zone-tab-spacer { display: none; }
+
+/* Zone hide (slide off-screen) */
+.zone.zone-tl.hidden { transform: translateY(calc(-100% - 24px)); opacity: 0; }
+.zone.zone-tr.hidden { transform: translateX(calc(100% + 24px)); opacity: 0; }
+.zone.zone-bl.hidden { transform: translateY(calc(100% + 24px)); opacity: 0; }
+.zone.zone-br.hidden { transform: translateX(calc(100% + 24px)); opacity: 0; }
+
+/* Zone pull tab (appears when zone is hidden) */
+.zone-pull-tab {
+  position: fixed;
+  z-index: 6;
+  background: var(--zone-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--zone-border);
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  transition: opacity 0.3s, transform 0.2s;
+  user-select: none;
+  opacity: 0;
+  pointer-events: none;
+}
+.zone-pull-tab.visible { opacity: 1; pointer-events: auto; }
+.zone-pull-tab:hover { color: var(--text-primary); transform: scale(1.05); }
+.zone-pull-tab.tab-tl { top: 0; left: 12px; border-radius: 0 0 8px 8px; border-top: none; }
+.zone-pull-tab.tab-tr { top: 0; right: 12px; border-radius: 0 0 8px 8px; border-top: none; }
+.zone-pull-tab.tab-bl { bottom: 0; left: 12px; border-radius: 8px 8px 0 0; border-bottom: none; }
+.zone-pull-tab.tab-br { bottom: 0; right: 12px; border-radius: 8px 8px 0 0; border-bottom: none; }
+
+/* ═══════════════════════════════════════════════════════════
+   TAB BAR — VSCode-style
+   ═══════════════════════════════════════════════════════════ */
+.zone-tabs {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px 0 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  min-height: 34px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.zone-tabs::-webkit-scrollbar { height: 0; }
+
+.zone-tab {
+  padding: 5px 14px;
+  font-size: 0.76rem;
+  font-family: var(--font);
+  color: var(--tab-inactive);
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  white-space: nowrap;
+  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
+  user-select: none;
+  position: relative;
+  letter-spacing: 0.02em;
+}
+.zone-tab:hover { color: rgba(255,255,255,0.8); background: var(--tab-hover-bg); }
+.zone-tab.active {
+  color: var(--text-primary);
+  background: var(--tab-active-bg);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset;
+}
+.zone-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 14px; right: 14px;
+  height: 2px;
+  background: var(--accent-gold);
+  border-radius: 1px;
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.zone-tab-icon { margin-right: 5px; }
+
+/* Zone controls (right side of tab bar) */
+.zone-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+  flex-shrink: 0;
+}
+.zone-ctrl-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.25);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+  font-family: var(--font);
+  line-height: 1;
+}
+.zone-ctrl-btn:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.08); }
+.zone-ctrl-btn.collapse-btn { font-size: 0.9rem; }
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL CONTENT AREA
+   ═══════════════════════════════════════════════════════════ */
+.zone-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px;
+  position: relative;
+  scroll-behavior: smooth;
+}
+.zone-content::-webkit-scrollbar { width: 3px; }
+.zone-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.zone-content::-webkit-scrollbar-track { background: transparent; }
+
+/* Panel wrapper — one per registered panel */
+.zone-panel {
+  display: none;
+  animation: panel-enter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.zone-panel.active { display: block; }
+
+@keyframes panel-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Panel exit (applied briefly before hiding) */
+.zone-panel.exiting {
+  animation: panel-exit 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes panel-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GLASS ELEMENTS (kept for interior use)
+   ═══════════════════════════════════════════════════════════ */
 .glass {
   background: rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   padding: 16px 20px;
   position: relative;
   z-index: 1;
 }
 
-/* ── Top bar ─────────────────────────────────────────── */
-#top-bar {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(600px, 90vw);
-  z-index: 10;
-  text-align: center;
-}
-
-#top-bar h1 {
-  font-size: 1.1rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.6;
-  margin-bottom: 6px;
-}
-
-#main-quest {
+/* ═══════════════════════════════════════════════════════════
+   MAIN QUEST (zone-tl compact)
+   ═══════════════════════════════════════════════════════════ */
+#main-quest-input {
   width: 100%;
   background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(255,255,255,0.15);
-  color: #e0e0e0;
-  font-size: 1.4rem;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-primary);
+  font-size: 1.1rem;
   font-weight: 300;
-  text-align: center;
-  padding: 8px 4px;
+  font-family: var(--font);
+  padding: 6px 4px;
   outline: none;
   transition: border-color 0.3s;
 }
+#main-quest-input:focus { border-bottom-color: rgba(255,255,255,0.4); }
+#main-quest-input::placeholder { color: rgba(255,255,255,0.18); }
 
-#main-quest:focus { border-bottom-color: rgba(255,255,255,0.5); }
-#main-quest::placeholder { color: rgba(255,255,255,0.2); }
-
-/* ── Bottom section ──────────────────────────────────── */
-#bottom-section {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(700px, 92vw);
-  z-index: 10;
-}
-
-#chaos-input-area {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-}
-
-#chaos-textarea {
-  flex: 1;
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px;
-  color: #e0e0e0;
-  font-size: 0.95rem;
-  font-family: inherit;
-  padding: 12px 14px;
-  resize: none;
-  outline: none;
-  min-height: 50px;
-  max-height: 120px;
-  transition: border-color 0.3s;
-}
-
-#chaos-textarea:focus { border-color: rgba(255,255,255,0.3); }
-#chaos-textarea::placeholder { color: rgba(255,255,255,0.25); }
-
-.btn {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 12px;
-  color: #e0e0e0;
-  font-size: 0.95rem;
-  font-family: inherit;
-  padding: 12px 20px;
-  cursor: pointer;
-  transition: background 0.25s, border-color 0.25s, opacity 0.25s;
-  white-space: nowrap;
-}
-
-.btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.25); }
-.btn:active { transform: scale(0.97); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-#error-banner {
-  display: none;
-  margin-top: 10px;
-  padding: 10px 14px;
-  background: rgba(220, 50, 50, 0.2);
-  border: 1px solid rgba(220, 50, 50, 0.4);
-  border-radius: 10px;
-  color: #ff8a8a;
-  font-size: 0.85rem;
-}
-
-#loading-text {
-  display: none;
-  margin-top: 10px;
-  font-size: 0.85rem;
-  opacity: 0.6;
-  text-align: center;
-}
-
-/* ── Cards container ─────────────────────────────────── */
-#cards-container {
-  display: none;
-  margin-top: 14px;
-  gap: 12px;
-  justify-content: center;
-}
-
-.card-column {
-  flex: 1;
-  min-width: 0;
-  padding: 10px;
-  border-radius: 12px;
-  min-height: 60px;
-}
-
-.card-column h3 {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  opacity: 0.5;
-  margin-bottom: 8px;
-  text-align: center;
-}
-
-.card-column.column-now    { background: rgba(255, 215, 0, 0.10); }
-.card-column.column-later  { background: rgba(74, 144, 226, 0.10); }
-.card-column.column-trash  { background: rgba(160, 160, 160, 0.10); }
-
-.chaos-card {
-  background: rgba(255,255,255,0.11);
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  font-size: 0.85rem;
-  cursor: grab;
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-
-.chaos-card:active { cursor: grabbing; transform: scale(0.97); }
-.chaos-card.dragging { opacity: 0.5; }
-
-.chaos-card.card-now   { border-left: 3px solid #FFD700; }
-.chaos-card.card-later { border-left: 3px solid #4A90E2; }
-.chaos-card.card-trash { border-left: 3px solid #888; }
-
-.card-column.drag-over {
-  background: rgba(255,255,255,0.1);
-  outline: 2px dashed rgba(255,255,255,0.2);
-  outline-offset: -2px;
-}
-
-/* ── Sunrise button (fixed bottom-right) ─────────────── */
-#sunrise-btn {
-  position: fixed;
-  bottom: auto;
-  top: 90px;
-  right: 30px;
-  z-index: 20;
-  background: rgba(255, 215, 0, 0.12);
-  border: 1px solid rgba(255, 215, 0, 0.25);
-  color: #FFD700;
-  font-size: 0.85rem;
-  padding: 12px 18px;
-  border-radius: 30px;
-  cursor: pointer;
-  transition: background 0.3s, box-shadow 0.3s;
-  font-family: inherit;
-}
-
-#sunrise-btn:hover {
-  background: rgba(255, 215, 0, 0.22);
-  box-shadow: 0 0 20px rgba(255, 215, 0, 0.1);
-}
-
-#sunrise-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-/* ── Sunrise settings panel ──────────────────────────── */
-#sunrise-settings {
-  position: fixed;
-  bottom: auto;
-  top: 140px;
-  right: 30px;
-  z-index: 19;
-  min-width: 200px;
-  display: none;
-  font-size: 0.8rem;
-}
-
-#sunrise-settings.visible { display: block; }
-
-#sunrise-settings label {
+.quest-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
-#sunrise-settings input[type="time"] {
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px;
-  color: #e0e0e0;
-  font-size: 0.9rem;
-  font-family: inherit;
-  padding: 6px 10px;
-  outline: none;
-  width: 100%;
-}
-
-#sunrise-settings input[type="time"]:focus {
-  border-color: rgba(255, 215, 0, 0.4);
-}
-
-#sunrise-settings .time-label {
-  display: block;
-  margin-bottom: 4px;
-  opacity: 0.6;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-#sunrise-settings .settings-row {
-  margin-bottom: 10px;
-}
-
-#sunrise-settings .settings-note {
+  margin-top: 6px;
   font-size: 0.7rem;
   opacity: 0.4;
-  margin-top: 6px;
-  text-align: center;
 }
-
-/* Gear icon next to sunrise button */
-#sunrise-gear {
-  position: fixed;
-  bottom: auto;
-  top: 98px;
-  right: 155px;
-  z-index: 21;
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,0.3);
-  font-size: 1.1rem;
-  cursor: pointer;
-  padding: 4px;
-  transition: color 0.3s, transform 0.3s;
-  font-family: inherit;
-}
-
-#sunrise-gear:hover {
-  color: rgba(255,255,255,0.6);
-  transform: rotate(30deg);
-}
-
-#sunrise-gear.active {
-  color: #FFD700;
-  transform: rotate(60deg);
-}
-
-/* Toggle switch */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 20px;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(255,255,255,0.15);
-  border-radius: 20px;
-  transition: background 0.3s;
-}
-
-.toggle-slider::before {
-  content: "";
-  position: absolute;
-  height: 16px; width: 16px;
-  left: 2px; bottom: 2px;
-  background: #e0e0e0;
-  border-radius: 50%;
-  transition: transform 0.3s;
-}
-
-.toggle-switch input:checked + .toggle-slider {
-  background: rgba(255, 215, 0, 0.5);
-}
-
-.toggle-switch input:checked + .toggle-slider::before {
-  transform: translateX(16px);
-}
-
-/* ── Activity indicator (v0.2) ────────────────────────── */
-.activity-pill {
-  display: none;
-  font-size: 0.7rem;
-  opacity: 0.6;
-  margin-left: 10px;
-  vertical-align: middle;
+.quest-meta .activity-pill {
+  font-size: 0.68rem;
+  opacity: 0.8;
   white-space: nowrap;
-}
-.activity-pill.visible { display: inline; }
-.activity-pill.idle { opacity: 0.4; }
-@keyframes pulse-opacity {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 0.3; }
-}
-.activity-pill.pulse {
-  animation: pulse-opacity 2s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .activity-pill.pulse { animation: none; }
-}
-
-/* ── Focus panel bars (v0.2) ─────────────────────────── */
-.focus-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  cursor: pointer;
-  font-size: 0.75rem;
-}
-.focus-bar-label {
-  width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.7;
-  flex-shrink: 0;
 }
-.focus-bar-track {
+.quest-meta .activity-pill.idle { opacity: 0.4; }
+
+/* ═══════════════════════════════════════════════════════════
+   KANBAN BOARD (inside zone-bl)
+   ═══════════════════════════════════════════════════════════ */
+.kanban-board-inner {
+  display: flex;
+  gap: 6px;
   flex: 1;
-  height: 16px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 8px;
+  min-height: 150px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.kanban-board-inner::-webkit-scrollbar { height: 4px; }
+.kanban-board-inner::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+.kanban-column {
+  flex: 1;
+  min-width: 130px;
+  max-width: 240px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
-.focus-bar-fill {
-  height: 100%;
-  border-radius: 8px;
-  transition: width 0.5s ease;
-  min-width: 2px;
-}
-.focus-bar-fill.focus      { background: #FFD700; }
-.focus-bar-fill.distraction { background: #e05050; }
-.focus-bar-fill.neutral    { background: #888; }
-.focus-bar-fill.idle       { background: #557; }
-.focus-bar-fill.away       { background: #335; }
-.focus-bar-pct {
-  width: 40px;
-  text-align: right;
-  opacity: 0.5;
-  flex-shrink: 0;
-}
-#focus-panel { display: none; }
-#focus-panel.visible { display: block; }
-
-/* ── Today's Focus panel ─────────────────────────────── */
-#today-panel {
-  position: fixed;
-  top: 100px;
-  right: 20px;
-  z-index: 10;
-  min-width: 160px;
-  display: none;
-  font-size: 0.8rem;
-}
-
-#today-panel.visible { display: block; }
-
-#today-panel h3 {
-  font-size: 0.7rem;
+.kanban-column-header {
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   opacity: 0.4;
-  margin-bottom: 6px;
-}
-
-#today-panel ul {
-  list-style: none;
-}
-
-#today-panel li {
-  padding: 4px 0;
-  opacity: 0.7;
-  font-size: 0.8rem;
-}
-
-/* ── Responsive ──────────────────────────────────────── */
-@media (max-width: 600px) {
-  #cards-container { flex-direction: column; }
-  #bottom-section { bottom: 20px; width: 95vw; }
-  #sunrise-btn { top: auto; bottom: 20px; right: 20px; font-size: 0.8rem; padding: 10px 14px; }
-  #sunrise-gear { top: auto; bottom: 28px; right: 120px; }
-  #sunrise-settings { top: auto; bottom: 70px; right: 20px; }
-  #top-bar { top: 12px; width: 95vw; }
-  #today-panel { display: none !important; }
-}
-
-@media (min-width: 601px) and (max-width: 900px) {
-  #today-panel { min-width: 120px; right: 10px; }
-  .focus-bar-label { width: 40px; }
-  .focus-bar-pct { width: 30px; }
-}
-
-/* ── Reduced motion — respect OS preference ──────────── */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
-  #nebula { display: none; }
-  .chaos-card { transition: none; }
-  #sunrise-btn { transition: none; }
-  .focus-bar-fill { transition: none; }
-}
-
-/* ── Today list view ──────────────────────────────────── */
-#today-list-view {
-  display: none; position: fixed; top: 90px; left: 50%; transform: translateX(-50%);
-  width: min(600px, 90vw); z-index: 5; max-height: calc(100vh - 180px); overflow-y: auto;
-  padding: 16px 20px;
-}
-#today-list-view.visible { display: block; }
-#today-list-view h2 { font-size: 0.9rem; font-weight: 500; opacity: 0.6; margin-bottom: 12px; }
-#today-list-view ol { list-style: decimal inside; padding: 0; }
-#today-list-view li {
-  padding: 8px 10px; margin-bottom: 4px; border-radius: 8px;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
-  cursor: pointer; transition: background 0.2s; font-size: 0.9rem;
-}
-#today-list-view li:hover { background: rgba(255,255,255,0.08); }
-#today-list-view li .list-checkbox { margin-right: 10px; cursor: pointer; }
-#today-list-view li.done { opacity: 0.4; text-decoration: line-through; }
-#today-list-view .list-meta { font-size: 0.7rem; opacity: 0.4; margin-left: 24px; }
-#today-list-view .toggle-btn {
-  background: transparent; border: 1px solid rgba(255,255,255,0.15);
-  color: #e0e0e0; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
-  margin-bottom: 12px; transition: background 0.2s;
-}
-#today-list-view .toggle-btn:hover { background: rgba(255,255,255,0.1); }
-/* ── Sunrise active — darken glass / cards so text stays readable ── */
-body.sunrise-active .glass {
-  background: rgba(0, 0, 0, 0.35) !important;
-}
-body.sunrise-active .chaos-card {
-  background: rgba(0, 0, 0, 0.35) !important;
-}
-body.sunrise-active #today-panel {
-  background: rgba(0, 0, 0, 0.35) !important;
-}
-
-/* ── Kanban Board ──────────────────────────────────────── */
-#kanban-board {
-  position: fixed; top: 140px; left: 50%; transform: translateX(-50%);
-  width: min(1400px, 95vw); height: calc(100vh - 300px);
-  z-index: 5; display: none; gap: 8px; padding: 12px;
-  overflow-x: auto; overflow-y: hidden;
-}
-#kanban-board.visible { display: flex; }
-.kanban-column {
-  flex: 1; min-width: 180px; max-width: 280px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 12px; padding: 10px;
-  display: flex; flex-direction: column; max-height: 100%;
-}
-.kanban-column-header {
-  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
-  opacity: 0.5; margin-bottom: 10px; text-align: center;
-  padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 8px;
+  text-align: center;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
   flex-shrink: 0;
 }
 .kanban-cards {
-  flex: 1; overflow-y: auto; min-height: 60px; padding: 2px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 40px;
+  padding: 2px;
 }
 .kanban-cards::-webkit-scrollbar { width: 3px; }
-.kanban-cards::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.kanban-cards::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
 .goal-card {
-  background: rgba(255,255,255,0.13);
-  border: 1px solid rgba(255,255,255,0.22);
-  border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
-  font-size: 0.85rem; cursor: grab;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: var(--radius-md);
+  padding: 7px 8px 7px 9px;
+  margin-bottom: 5px;
+  font-size: 0.78rem;
+  cursor: grab;
   transition: transform 0.15s, opacity 0.2s, box-shadow 0.15s;
   position: relative;
+  line-height: 1.3;
+  word-break: break-word;
 }
 .goal-card:active { cursor: grabbing; transform: scale(0.97); }
 .goal-card.dragging { opacity: 0.5; }
 .goal-card.done { opacity: 0.4; text-decoration: line-through; border-color: rgba(100,255,100,0.2); }
-.goal-card.overdue { border-left: 3px solid #ff6b6b; }
-.goal-card.type-long_term { border-left: 3px solid #4A90E2; }
-.goal-card.type-habit { border-left: 3px solid #4CAF50; }
-.goal-card.type-maintenance { border-left: 3px solid #FF9800; }
+.goal-card.overdue { border-left: 3px solid var(--accent-red); }
+.goal-card.type-long_term { border-left-color: var(--accent-blue); }
+.goal-card.type-habit { border-left-color: var(--accent-green); }
+.goal-card.type-maintenance { border-left-color: var(--accent-orange); }
 .goal-card.color-blue { border-left-color: #4A90E2; }
 .goal-card.color-green { border-left-color: #4CAF50; }
 .goal-card.color-orange { border-left-color: #FF9800; }
@@ -565,1354 +350,1732 @@ body.sunrise-active #today-panel {
 .goal-card.color-red { border-left-color: #f44336; }
 .goal-card.color-teal { border-left-color: #009688; }
 .goal-card.color-pink { border-left-color: #e91e63; }
-.card-edit-input {
-  width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 6px; color: #e0e0e0; font-size: 0.85rem;
-  font-family: inherit; padding: 4px 6px; outline: none; margin-bottom: 4px;
-}
-.goal-card .card-meta { font-size: 0.65rem; opacity: 0.4; margin-top: 4px; }
-.goal-card .card-actions { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; }
+.goal-card .card-meta { font-size: 0.6rem; opacity: 0.35; margin-top: 3px; }
+.goal-card .card-actions { position: absolute; top: 4px; right: 6px; display: flex; gap: 2px; }
 .goal-card .btn-split, .goal-card .btn-edit {
-  background: transparent; border: none; color: rgba(255,255,255,0.3);
-  font-size: 0.75rem; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+  background: transparent; border: none; color: rgba(255,255,255,0.25);
+  font-size: 0.7rem; cursor: pointer; padding: 2px 4px; border-radius: 4px;
 }
-.goal-card .btn-split:hover, .goal-card .btn-edit:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.1); }
-.kanban-column.drag-over { background: rgba(255,255,255,0.08); outline: 2px dashed rgba(255,255,255,0.2); outline-offset: -2px; }
+.goal-card .btn-split:hover, .goal-card .btn-edit:hover { color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.08); }
+.kanban-column.drag-over { background: rgba(255,255,255,0.06); outline: 2px dashed rgba(255,255,255,0.15); outline-offset: -2px; }
 
-/* ── Bottom strip (inbox / trash / capture) ────────────── */
-#bottom-strip {
-  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: min(1400px, 95vw); z-index: 5;
-  display: none; flex-direction: row; gap: 10px; padding: 10px 12px;
-  border-radius: 16px 16px 0 0;
+.card-edit-input {
+  width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 4px; color: var(--text-primary); font-size: 0.8rem;
+  font-family: var(--font); padding: 3px 5px; outline: none; margin-bottom: 3px;
 }
-#bottom-strip.visible { display: flex; }
-.bottom-zone {
-  flex: 1; min-height: 60px; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 4px;
-  background: rgba(255,255,255,0.03); border-radius: 10px;
-  border: 1px dashed rgba(255,255,255,0.08); padding: 8px;
+
+/* Kanban panel flex layout — ensures bottom strip stays visible */
+#panel-kanban.active {
+  display: flex !important;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Kanban bottom strip (inbox / trash / capture) */
+.kanban-strip {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 0 0;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
+}
+.kanban-strip .strip-zone {
+  flex: 1;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(255,255,255,0.02);
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(255,255,255,0.06);
+  padding: 6px;
   transition: background 0.2s, border-color 0.2s;
 }
-.bottom-zone:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); }
-.bottom-zone .zone-icon { font-size: 1.3rem; opacity: 0.7; }
-.bottom-zone .zone-label { font-size: 0.7rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.05em; }
-.inbox-stack { position: relative; width: 100%; min-height: 50px; }
-.inbox-shadow {
-  position: absolute; top: 8px; left: 8px; right: 4px; bottom: -4px;
-  background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.06);
-  border-radius: 10px;
+.kanban-strip .strip-zone:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); }
+.kanban-strip .strip-zone .zone-icon { font-size: 1.1rem; opacity: 0.6; }
+.kanban-strip .strip-zone .zone-label { font-size: 0.65rem; opacity: 0.4; text-transform: uppercase; letter-spacing: 0.05em; }
+.kanban-strip .strip-capture {
+  flex: 2;
+  flex-direction: row;
+  gap: 6px;
+  padding: 4px 8px;
 }
-.inbox-shadow + .inbox-shadow { top: 4px; left: 4px; right: 8px; bottom: 0; }
+.kanban-strip .strip-capture textarea {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: var(--font);
+  padding: 5px 7px;
+  resize: none;
+  outline: none;
+  min-height: 28px;
+}
+.kanban-strip .strip-capture textarea:focus { border-color: rgba(255,255,255,0.2); }
+.inbox-stack { position: relative; width: 100%; min-height: 38px; }
+.inbox-shadow {
+  position: absolute; top: 6px; left: 6px; right: 3px; bottom: -3px;
+  background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.04);
+  border-radius: var(--radius-md);
+}
+.inbox-shadow + .inbox-shadow { top: 3px; left: 3px; right: 6px; bottom: 0; }
 .inbox-blank {
-  position: relative; z-index: 1; background: rgba(255,255,255,0.04) !important;
-  border: 1px dashed rgba(255,255,255,0.15) !important; border-radius: 10px;
-  opacity: 0.7; cursor: grab; margin-bottom: 0 !important; min-height: 44px;
+  position: relative; z-index: 1;
+  background: rgba(255,255,255,0.03) !important;
+  border: 1px dashed rgba(255,255,255,0.12) !important;
+  border-radius: var(--radius-md);
+  opacity: 0.65; cursor: grab; margin-bottom: 0 !important; min-height: 36px;
   display: flex; align-items: center; justify-content: center;
 }
-.inbox-blank:hover { opacity: 1; background: rgba(255,255,255,0.07) !important; }
-.inbox-blank .card-title { opacity: 0.5; font-style: italic; font-size: 0.8rem; }
-#zone-capture {
-  flex: 2; flex-direction: row; gap: 8px; padding: 6px 10px;
-}
-#zone-capture textarea {
-  flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px; color: #e0e0e0; font-size: 0.85rem;
-  font-family: inherit; padding: 6px 8px; resize: none; outline: none; min-height: 32px;
-}
-#zone-capture textarea:focus { border-color: rgba(255,255,255,0.25); }
-#zone-capture .btn-sm { font-size: 0.8rem; padding: 6px 12px; white-space: nowrap; }
+.inbox-blank:hover { opacity: 1; background: rgba(255,255,255,0.06) !important; }
+.inbox-blank .card-title { opacity: 0.45; font-style: italic; font-size: 0.75rem; }
 
-/* ── Stats column ──────────────────────────────────────── */
-.stats-column { min-width: 140px; max-width: 200px; font-size: 0.8rem; }
-.stat-item { margin-bottom: 8px; }
-.stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.4; }
-.stat-value { font-size: 1.1rem; font-weight: 500; }
-.nudge-text {
-  font-size: 0.75rem; padding: 8px; border-radius: 8px;
-  background: rgba(255,215,0,0.08); border: 1px solid rgba(255,215,0,0.15);
-  margin-bottom: 8px; line-height: 1.4;
+/* Chaos strip (inside kanban) */
+.chaos-strip { flex-shrink: 0; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.chaos-strip .chaos-toggle { font-size: 0.7rem; cursor: pointer; opacity: 0.4; padding: 3px 0; }
+.chaos-strip .chaos-toggle:hover { opacity: 0.7; }
+.chaos-strip .chaos-body { display: none; margin-top: 5px; }
+.chaos-strip .chaos-body.open { display: flex; gap: 6px; align-items: center; }
+.chaos-strip textarea {
+  flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.78rem;
+  font-family: var(--font); padding: 6px 8px; resize: none; outline: none;
+  min-height: 32px; max-height: 50px;
 }
-.nudge-text.alert { background: rgba(255,100,100,0.08); border-color: rgba(255,100,100,0.2); }
-.nudge-text.suggestion { background: rgba(100,200,255,0.08); border-color: rgba(100,200,255,0.2); }
-.nudge-dismiss { float: right; background: transparent; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 0.8rem; padding: 0 4px; }
+.chaos-strip textarea:focus { border-color: rgba(255,255,255,0.25); }
+.chaos-strip .btn-sm { font-size: 0.75rem; padding: 6px 12px; }
 
-/* ── Chaos inbox strip ─────────────────────────────────── */
-#chaos-strip { display: block; flex-shrink: 0; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
-#chaos-strip .chaos-toggle { font-size: 0.75rem; cursor: pointer; opacity: 0.5; padding: 4px 0; }
-#chaos-strip .chaos-toggle:hover { opacity: 0.8; }
-#chaos-strip .chaos-body { display: none; margin-top: 6px; }
-#chaos-strip .chaos-body.open { display: flex; gap: 8px; align-items: center; }
-#chaos-strip textarea {
-  flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px; color: #e0e0e0; font-size: 0.85rem;
-  font-family: inherit; padding: 8px 10px; resize: none; outline: none; min-height: 36px; max-height: 60px;
-}
-#chaos-strip textarea:focus { border-color: rgba(255,255,255,0.3); }
-#chaos-strip .btn-sm { font-size: 0.8rem; padding: 8px 14px; }
-
-/* ── Quick-add inline ─────────────────────────────────── */
-.quick-add-area { flex-shrink: 0; padding: 4px 2px; }
+/* Quick-add */
+.quick-add-area { flex-shrink: 0; padding: 3px 1px; }
 .quick-add-btn {
-  width: 100%; text-align: left; opacity: 0.4; cursor: pointer;
-  font-size: 0.8rem; padding: 6px 8px; border-radius: 8px;
-  border: 1px dashed rgba(255,255,255,0.15); background: transparent; color: #e0e0e0;
+  width: 100%; text-align: left; opacity: 0.35; cursor: pointer;
+  font-size: 0.73rem; padding: 5px 7px; border-radius: var(--radius-sm);
+  border: 1px dashed rgba(255,255,255,0.12); background: transparent; color: var(--text-primary);
 }
-.quick-add-btn:hover { opacity: 0.7; background: rgba(255,255,255,0.05); }
+.quick-add-btn:hover { opacity: 0.65; background: rgba(255,255,255,0.04); }
 .quick-add-input { display: none; width: 100%; }
 .quick-add-input.open { display: block; }
 .quick-add-input input {
-  width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px; color: #e0e0e0; font-size: 0.85rem;
-  font-family: inherit; padding: 6px 10px; outline: none;
+  width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.78rem;
+  font-family: var(--font); padding: 5px 8px; outline: none;
 }
 
-/* ── Toast ─────────────────────────────────────────────── */
-#toast-container { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 6px; }
+/* Buttons */
+.btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s, opacity 0.25s;
+  white-space: nowrap;
+}
+.btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.22); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+.btn-sm { font-size: 0.75rem; padding: 6px 12px; }
+
+/* ═══════════════════════════════════════════════════════════
+   GOALS PANEL (zone-bl)
+   ═══════════════════════════════════════════════════════════ */
+.goal-panel-card {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.goal-panel-card:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.16); }
+.goal-panel-card.type-long_term { border-left: 3px solid var(--accent-blue); }
+.goal-panel-card.type-habit { border-left: 3px solid var(--accent-green); }
+.goal-panel-card.type-maintenance { border-left: 3px solid var(--accent-orange); }
+.goal-panel-card.paused { opacity: 0.45; }
+
+.goal-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.goal-panel-title { font-size: 0.85rem; font-weight: 500; }
+.goal-panel-type {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.4;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+}
+.goal-panel-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-bar .progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--accent-gold);
+}
+.progress-bar .progress-fill.high { background: var(--accent-green); }
+.progress-bar .progress-fill.low { background: var(--accent-red); }
+.goal-panel-pct { font-size: 0.75rem; opacity: 0.6; min-width: 36px; text-align: right; }
+
+.goal-panel-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 0.65rem;
+  opacity: 0.35;
+}
+.goal-panel-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  justify-content: flex-end;
+}
+.goal-panel-actions button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-family: var(--font);
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.goal-panel-actions button:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); }
+.goal-panel-actions button.danger:hover { border-color: var(--accent-red); color: var(--accent-red); }
+
+.empty-state {
+  text-align: center;
+  padding: 30px 10px;
+  opacity: 0.35;
+  font-size: 0.85rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATS PANEL (zone-tr)
+   ═══════════════════════════════════════════════════════════ */
+.stat-item { margin-bottom: 10px; }
+.stat-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.35; }
+.stat-value { font-size: 1.1rem; font-weight: 500; }
+.stat-sub { font-size: 0.7rem; opacity: 0.5; }
+
+.nudge-item {
+  font-size: 0.7rem;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,215,0,0.06);
+  border: 1px solid rgba(255,215,0,0.12);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.nudge-item.alert { background: rgba(255,100,100,0.06); border-color: rgba(255,100,100,0.15); }
+.nudge-item.suggestion { background: rgba(100,200,255,0.06); border-color: rgba(100,200,255,0.15); }
+
+/* Focus bars (inside stats) */
+.focus-bar-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+  cursor: pointer; font-size: 0.7rem;
+}
+.focus-bar-label { width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.6; flex-shrink: 0; }
+.focus-bar-track { flex: 1; height: 14px; background: rgba(255,255,255,0.05); border-radius: 7px; overflow: hidden; }
+.focus-bar-fill { height: 100%; border-radius: 7px; transition: width 0.5s ease; min-width: 2px; }
+.focus-bar-fill.focus { background: #FFD700; }
+.focus-bar-fill.distraction { background: #e05050; }
+.focus-bar-fill.neutral { background: #888; }
+.focus-bar-fill.idle { background: #557; }
+.focus-bar-fill.away { background: #335; }
+.focus-bar-pct { width: 36px; text-align: right; opacity: 0.45; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════════════
+   SUNRISE (zone-tr or floating)
+   ═══════════════════════════════════════════════════════════ */
+.sunrise-area {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#sunrise-btn {
+  flex: 1;
+  background: rgba(255, 215, 0, 0.10);
+  border: 1px solid rgba(255, 215, 0, 0.22);
+  color: var(--accent-gold);
+  font-size: 0.78rem;
+  padding: 8px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.3s, box-shadow 0.3s;
+  font-family: var(--font);
+}
+#sunrise-btn:hover { background: rgba(255, 215, 0, 0.18); box-shadow: 0 0 18px rgba(255, 215, 0, 0.08); }
+#sunrise-btn:disabled { opacity: 0.25; cursor: not-allowed; box-shadow: none; }
+
+#sunrise-gear {
+  background: transparent; border: none; color: rgba(255,255,255,0.2);
+  font-size: 1rem; cursor: pointer; padding: 4px;
+  transition: color 0.3s, transform 0.3s; font-family: var(--font);
+}
+#sunrise-gear:hover { color: rgba(255,255,255,0.55); transform: rotate(30deg); }
+#sunrise-gear.active { color: var(--accent-gold); transform: rotate(60deg); }
+
+.sunrise-settings-inline {
+  display: none;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.sunrise-settings-inline.open { display: flex; }
+.sunrise-settings-inline label { display: flex; align-items: center; gap: 4px; cursor: pointer; opacity: 0.6; }
+.sunrise-settings-inline input[type="time"] {
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px; color: var(--text-primary); font-size: 0.75rem;
+  font-family: var(--font); padding: 3px 6px; outline: none;
+}
+
+/* Toggle switch */
+.toggle-switch { position: relative; display: inline-block; width: 32px; height: 18px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.12); border-radius: 18px;
+  transition: background 0.3s;
+}
+.toggle-slider::before {
+  content: ""; position: absolute;
+  height: 14px; width: 14px; left: 2px; bottom: 2px;
+  background: var(--text-primary); border-radius: 50%;
+  transition: transform 0.3s;
+}
+.toggle-switch input:checked + .toggle-slider { background: rgba(255, 215, 0, 0.4); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(14px); }
+
+/* ═══════════════════════════════════════════════════════════
+   FEED PANEL (zone-tl)
+   ═══════════════════════════════════════════════════════════ */
+.feed-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.feed-header-info {
+  font-size: 0.68rem;
+  opacity: 0.45;
+}
+.feed-header-info .dot { margin: 0 4px; opacity: 0.3; }
+.feed-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-family: var(--font);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.feed-btn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.1); }
+.feed-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.feed-btn.active { color: var(--accent-gold); border-color: rgba(255,215,0,0.3); }
+
+.feed-items {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.feed-items::-webkit-scrollbar { width: 3px; }
+.feed-items::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+
+.feed-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  transition: background 0.2s, border-color 0.2s, opacity 0.3s, transform 0.3s;
+  position: relative;
+}
+.feed-card:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); }
+.feed-card.dismissing {
+  opacity: 0;
+  transform: translateX(30px);
+}
+.feed-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.feed-card-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 18px;
+  text-align: center;
+}
+.feed-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.feed-card-title {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-word;
+  color: var(--text-primary);
+}
+.feed-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.feed-card-tag {
+  font-size: 0.6rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.feed-card-relevance {
+  font-size: 0.6rem;
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.feed-card-relevance-bar {
+  width: 40px;
+  height: 3px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.feed-card-relevance-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s;
+}
+.feed-card-relevance-fill.high { background: var(--accent-green); }
+.feed-card-relevance-fill.medium { background: var(--accent-gold); }
+.feed-card-relevance-fill.low { background: var(--accent-orange); }
+.feed-card-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.feed-card-action {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.2);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+  font-family: var(--font);
+  line-height: 1;
+}
+.feed-card-action:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.08); }
+.feed-card-action.link:hover { color: var(--accent-blue); }
+.feed-card-action.dismiss:hover { color: var(--accent-red); }
+
+.feed-footer {
+  flex-shrink: 0;
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  text-align: center;
+}
+.feed-footer-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.25);
+  font-size: 0.68rem;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: var(--font);
+  transition: color 0.2s;
+}
+.feed-footer-btn:hover { color: rgba(255,255,255,0.6); }
+
+/* Pulse animation for fetch in progress */
+.feed-pulse {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  animation: feed-pulse 1s ease-in-out infinite;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+@keyframes feed-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHAT PANEL (zone-br)
+   ═══════════════════════════════════════════════════════════ */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 100px;
+  max-height: 250px;
+  margin-bottom: 8px;
+}
+.chat-msg {
+  padding: 6px 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.chat-msg.user { color: var(--accent-gold); }
+.chat-msg.ai { color: var(--text-primary); opacity: 0.8; }
+.chat-input-row {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.chat-input-row input {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: var(--font);
+  padding: 7px 10px;
+  outline: none;
+}
+.chat-input-row input:focus { border-color: rgba(255,255,255,0.25); }
+.chat-input-row button {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-family: var(--font);
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.chat-input-row button:hover { background: rgba(255,255,255,0.14); }
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════ */
+#toast-container {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 100; display: flex; flex-direction: column; gap: 6px;
+}
 .toast {
-  background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
+  background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
   border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
-  padding: 10px 16px; font-size: 0.85rem; color: #e0e0e0;
+  padding: 10px 16px; font-size: 0.85rem; color: var(--text-primary);
   display: flex; gap: 12px; align-items: center;
   animation: toast-in 0.3s ease;
 }
 @keyframes toast-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-.toast .toast-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #e0e0e0; font-size: 0.8rem; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.toast .toast-btn {
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px; color: var(--text-primary); font-size: 0.8rem;
+  padding: 4px 10px; cursor: pointer; white-space: nowrap;
+}
 .toast .toast-btn:hover { background: rgba(255,255,255,0.2); }
-.loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #e0e0e0; border-radius: 50%; animation: spin 0.6s linear infinite; }
+.loading-spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.15); border-top-color: var(--text-primary);
+  border-radius: 50%; animation: spin 0.6s linear infinite;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  .zone.zone-tl, .zone.zone-tr, .zone.zone-bl, .zone.zone-br {
+    left: 6px; right: 6px; width: auto; max-height: 35vh;
+  }
+  .zone.zone-tl { top: 6px; }
+  .zone.zone-tr { top: auto; bottom: 50%; right: 6px; width: 45%; }
+  .zone.zone-bl { bottom: 6px; left: 6px; right: 50%; width: auto; }
+  .zone.zone-br { bottom: 6px; right: 6px; left: 50%; width: auto; }
+  .kanban-board-inner { flex-wrap: wrap; }
+  .kanban-column { min-width: 90px; max-width: none; }
+}
+
+@media (max-width: 480px) {
+  .zone.zone-tl { width: 100%; left: 4px; right: 4px; top: 4px; max-height: 22vh; }
+  .zone.zone-tr { width: 100%; left: 4px; right: 4px; top: auto; bottom: 50%; max-height: 28vh; }
+  .zone.zone-bl { width: 100%; left: 4px; right: 4px; bottom: 4px; max-height: 22vh; }
+  .zone.zone-br { display: none; }
+  .zone-tab { padding: 5px 10px; font-size: 0.7rem; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  #nebula { display: none; }
+}
 </style>
 </head>
 <body>
 
-<!-- Canvas -->
+<!-- Canvas (center — immersive, always visible) -->
 <canvas id="nebula"></canvas>
 
-<!-- Top bar: Main Quest -->
-<div id="top-bar" class="glass">
-  <h1>Horizon Chamber<span id="activity-indicator" class="activity-pill"></span></h1>
-  <input type="text" id="main-quest" placeholder="What is your main quest today?" autocomplete="off" spellcheck="false">
-</div>
-
-<!-- Today's Focus panel -->
-<div id="today-panel" class="glass">
-  <h2>Today's Focus</h2>
-  <ul id="today-list"></ul>
-  <div id="focus-panel">
-    <div id="focus-bars"></div>
-  </div>
-</div>
-
-<!-- Today List View (simplified) -->
-<div id="today-list-view" class="glass">
-  <button class="toggle-btn" onclick="toggleListView()">&larr; Back to Board</button>
-  <h2>Today&#8217;s Tasks</h2>
-  <ol id="today-list-items"></ol>
-</div>
-
-<!-- Kanban Board -->
-<div id="kanban-board" class="glass">
-  <div id="chaos-strip">
-    <div class="chaos-toggle" onclick="document.querySelector('#chaos-strip .chaos-body').classList.toggle('open')">Capture thoughts...</div>
-    <div class="chaos-body">
-      <textarea id="chaos-textarea2" rows="1" placeholder="Ideas, URLs, notes..."></textarea>
-      <button class="btn btn-sm" id="tame-btn2">Tame</button>
-    </div>
-    <div id="chaos-result-area"></div>
-  </div>
-  <div class="kanban-column" data-status="today">
-    <div class="kanban-column-header">Today</div>
-    <div class="kanban-cards" id="col-today" ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')"></div>
-    <div class="quick-add-area">
-      <button class="quick-add-btn" id="add-task-btn">+ Task</button>
-      <div class="quick-add-input"><input type="text" id="quick-task-input" placeholder="Task title..." /></div>
+<!-- Zone: Top-Left -->
+<div class="zone zone-tl" id="zone-tl">
+  <div class="zone-tabs" id="zone-tl-tabs">
+    <div class="zone-tab active" data-panel="quest"><span class="zone-tab-icon">&#x1F3AF;</span>Quest</div>
+    <div class="zone-tab" data-panel="feed"><span class="zone-tab-icon">&#x1F4E1;</span>Feed</div>
+    <div class="zone-controls">
+      <button class="zone-ctrl-btn collapse-btn" title="Hide zone" onclick="PanelSystem.collapseZone('tl')">&#x25B4;</button>
     </div>
   </div>
-  <div class="kanban-column" data-status="doing">
-    <div class="kanban-column-header">Doing</div>
-    <div class="kanban-cards" id="col-doing" ondragover="allowDrop(event)" ondrop="dropTask(event,'doing')"></div>
-  </div>
-  <div class="kanban-column" data-status="done">
-    <div class="kanban-column-header">Done</div>
-    <div class="kanban-cards" id="col-done" ondragover="allowDrop(event)" ondrop="dropTask(event,'done')"></div>
-  </div>
-  <div class="kanban-column" data-status="overdue">
-    <div class="kanban-column-header">Overdue</div>
-    <div class="kanban-cards" id="col-overdue" ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')"></div>
-  </div>
-  <div class="kanban-column stats-column">
-    <div class="kanban-column-header">Stats</div>
-    <div id="stats-content"></div>
-    <div class="quick-add-area" style="margin-top:8px">
-      <button class="quick-add-btn" id="add-goal-btn" style="text-align:center">+ New Goal</button>
-      <div class="quick-add-input"><input type="text" id="quick-goal-input" placeholder="Goal title..." /></div>
-    </div>
+  <div class="zone-content" id="zone-tl-content">
+    <div class="zone-panel active" data-panel="quest" id="panel-quest"></div>
+    <div class="zone-panel" data-panel="feed" id="panel-feed"></div>
   </div>
 </div>
+<div class="zone-pull-tab tab-tl" id="pull-tl" onclick="PanelSystem.showZone('tl')">&#x1F3AF; Quest</div>
 
-<!-- Bottom strip: inbox, trash, capture -->
-<div id="bottom-strip" class="glass">
-  <div class="bottom-zone" id="zone-inbox"
-       ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')">
-    <div class="zone-label" style="margin-bottom:4px">📥 New Cards</div>
-    <div class="inbox-stack" id="inbox-stack">
-      <div class="inbox-shadow"></div>
-      <div class="inbox-shadow"></div>
-      <div id="inbox-card" class="goal-card inbox-blank" draggable="true"
-           ondragstart="dragNewCard(event)" ondragend="onInboxDragEnd(event)">
-        <div class="card-title">New card</div>
-      </div>
+<!-- Zone: Top-Right -->
+<div class="zone zone-tr" id="zone-tr">
+  <div class="zone-tabs" id="zone-tr-tabs">
+    <div class="zone-tab active" data-panel="stats"><span class="zone-tab-icon">&#x1F4CA;</span>Stats</div>
+    <div class="zone-controls">
+      <button class="zone-ctrl-btn collapse-btn" title="Collapse zone" onclick="PanelSystem.collapseZone('tr')">&#x25B4;</button>
     </div>
   </div>
-  <div class="bottom-zone" id="zone-trash"
-       ondragover="allowDrop(event)" ondrop="trashTask(event)">
-    <div class="zone-icon">🗑️</div>
-    <div class="zone-label">Trash</div>
-  </div>
-  <div class="bottom-zone" id="zone-capture">
-    <div class="zone-icon">💭</div>
-    <textarea id="capture-input" rows="1" placeholder="Quick thought..."></textarea>
-    <button class="btn btn-sm" onclick="captureThought()">Tame</button>
+  <div class="zone-content" id="zone-tr-content">
+    <div class="zone-panel active" data-panel="stats" id="panel-stats"></div>
   </div>
 </div>
+<div class="zone-pull-tab tab-tr" id="pull-tr" onclick="PanelSystem.showZone('tr')">&#x1F4CA; Stats</div>
 
-<div id="error-banner"></div>
+<!-- Zone: Bottom-Left -->
+<div class="zone zone-bl" id="zone-bl">
+  <div class="zone-tabs" id="zone-bl-tabs">
+    <div class="zone-tab active" data-panel="kanban"><span class="zone-tab-icon">&#x1F4CB;</span>Kanban</div>
+    <div class="zone-tab" data-panel="goals"><span class="zone-tab-icon">&#x1F3AF;</span>Goals</div>
+    <div class="zone-controls">
+      <button class="zone-ctrl-btn collapse-btn" title="Collapse zone" onclick="PanelSystem.collapseZone('bl')">&#x25BE;</button>
+    </div>
+  </div>
+  <div class="zone-content" id="zone-bl-content">
+    <div class="zone-panel active" data-panel="kanban" id="panel-kanban"></div>
+    <div class="zone-panel" data-panel="goals" id="panel-goals"></div>
+  </div>
+</div>
+<div class="zone-pull-tab tab-bl" id="pull-bl" onclick="PanelSystem.showZone('bl')">&#x1F4CB; Kanban</div>
+
+<!-- Zone: Bottom-Right -->
+<div class="zone zone-br" id="zone-br">
+  <div class="zone-tabs" id="zone-br-tabs">
+    <div class="zone-tab active" data-panel="chat"><span class="zone-tab-icon">&#x1F4AC;</span>Chat</div>
+    <div class="zone-controls">
+      <button class="zone-ctrl-btn collapse-btn" title="Collapse zone" onclick="PanelSystem.collapseZone('br')">&#x25BE;</button>
+    </div>
+  </div>
+  <div class="zone-content" id="zone-br-content">
+    <div class="zone-panel active" data-panel="chat" id="panel-chat"></div>
+  </div>
+</div>
+<div class="zone-pull-tab tab-br" id="pull-br" onclick="PanelSystem.showZone('br')">&#x1F4AC; Chat</div>
+
+<!-- Toast container -->
 <div id="toast-container"></div>
-<!-- Sunrise button -->
-<button id="sunrise-btn">☀️ Start Sunrise</button>
-
-<!-- Sunrise settings -->
-<div id="sunrise-settings" class="glass">
-  <div class="settings-row">
-    <label>
-      <span class="toggle-switch">
-        <input type="checkbox" id="sunrise-toggle" aria-label="Enable auto sunrise">
-        <span class="toggle-slider"></span>
-      </span>
-      Auto Sunrise
-    </label>
-  </div>
-  <div class="settings-row">
-    <span class="time-label">Time</span>
-    <input type="time" id="sunrise-time" value="07:00" aria-label="Sunrise time">
-  </div>
-  <div class="settings-note">In-memory schedule • resets on restart</div>
-</div>
-
-<button id="sunrise-gear" aria-label="Sunrise settings">⚙️</button>
 
 <script>
 /* ═══════════════════════════════════════════════════════════
    GLOBALS
    ═══════════════════════════════════════════════════════════ */
-
 const canvas = document.getElementById('nebula');
 let ctx = null;
-try {
-  ctx = canvas.getContext('2d');
-} catch (err) {
-  console.warn('Canvas 2D context not available:', err);
-}
+try { ctx = canvas.getContext('2d'); } catch (err) { console.warn('Canvas 2D context not available:', err); }
 
 let canvasW, canvasH;
 let stars = [];
 const STAR_COUNT = 200;
-const MAX_FRAME_MS = 50;   // if frame takes >50ms, reduce particle count
-
-// Current canvas background color (RGB)
+const MAX_FRAME_MS = 50;
 let bgColor = { r: 10, g: 10, b: 15 };
-let targetColor = { r: 10, g: 10, b: 15 };  // fallback #0a0a0f
-
-// Sunrise state
+let targetColor = { r: 10, g: 10, b: 15 };
 let sunriseActive = false;
-let sunriseStartTime = 0;
-
-// Canvas available flag
 let canvasOk = ctx !== null;
 
 /* ═══════════════════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════════════════ */
-
-function hexToRgb(hex) {
-  const val = parseInt(hex.replace('#', ''), 16);
-  return { r: (val >> 16) & 255, g: (val >> 8) & 255, b: val & 255 };
-}
-
+function hexToRgb(hex) { const val = parseInt(hex.replace('#', ''), 16); return { r: (val >> 16) & 255, g: (val >> 8) & 255, b: val & 255 }; }
 function lerpChannel(a, b, t) { return Math.round(a + (b - a) * t); }
-
-function lerpColor(a, b, t) {
-  return {
-    r: lerpChannel(a.r, b.r, t),
-    g: lerpChannel(a.g, b.g, t),
-    b: lerpChannel(a.b, b.b, t),
-  };
-}
-
-function rgbToStyle(c) {
-  return `rgb(${c.r}, ${c.g}, ${c.b})`;
-}
+function lerpColor(a, b, t) { return { r: lerpChannel(a.r, b.r, t), g: lerpChannel(a.g, b.g, t), b: lerpChannel(a.b, b.b, t) }; }
+function rgbToStyle(c) { return 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')'; }
+function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 /* ═══════════════════════════════════════════════════════════
    CANVAS SETUP
    ═══════════════════════════════════════════════════════════ */
-
-function resizeCanvas() {
-  canvasW = canvas.width = window.innerWidth;
-  canvasH = canvas.height = window.innerHeight;
-}
-
+function resizeCanvas() { canvasW = canvas.width = window.innerWidth; canvasH = canvas.height = window.innerHeight; }
 window.addEventListener('resize', resizeCanvas);
 
-/* ═══════════════════════════════════════════════════════════
-   STARS
-   ═══════════════════════════════════════════════════════════ */
+function createStar() { return { x: Math.random() * canvasW, y: Math.random() * canvasH, radius: 0.5 + Math.random() * 2, speed: 0.1 + Math.random() * 0.4, alpha: 0.3 + Math.random() * 0.7 }; }
+function initStars(count) { stars = []; for (let i = 0; i < count; i++) stars.push(createStar()); }
 
-function createStar() {
-  return {
-    x: Math.random() * canvasW,
-    y: Math.random() * canvasH,
-    radius: 0.5 + Math.random() * 2,
-    speed: 0.1 + Math.random() * 0.4,
-    alpha: 0.3 + Math.random() * 0.7,
-  };
-}
-
-function initStars(count) {
-  stars = [];
-  for (let i = 0; i < count; i++) {
-    stars.push(createStar());
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ANIMATION LOOP
-   ═══════════════════════════════════════════════════════════ */
-
-let lastFrameTime = 0;
-let animActive = true;
-let currentStarCount = STAR_COUNT;
+let lastFrameTime = 0, animActive = true, currentStarCount = STAR_COUNT;
 
 function animate(timestamp) {
-  if (!animActive) return;
-  if (!canvasOk) return;
-
-  // Track frame performance
-  if (lastFrameTime > 0) {
-    const delta = timestamp - lastFrameTime;
-    if (delta > MAX_FRAME_MS && currentStarCount > 100) {
-      currentStarCount = 100;
-      initStars(currentStarCount);
-    }
-  }
+  if (!animActive || !canvasOk) return;
+  if (lastFrameTime > 0) { const delta = timestamp - lastFrameTime; if (delta > MAX_FRAME_MS && currentStarCount > 100) { currentStarCount = 100; initStars(currentStarCount); } }
   lastFrameTime = timestamp;
-
-  // Clear canvas with background color
   ctx.fillStyle = rgbToStyle(bgColor);
   ctx.fillRect(0, 0, canvasW, canvasH);
-
-  // Draw stars
   for (const star of stars) {
     star.y -= star.speed;
-    if (star.y + star.radius < 0) {
-      star.y = canvasH + star.radius;
-      star.x = Math.random() * canvasW;
-    }
-
-    ctx.beginPath();
-    ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
-    ctx.fill();
+    if (star.y + star.radius < 0) { star.y = canvasH + star.radius; star.x = Math.random() * canvasW; }
+    ctx.beginPath(); ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, ' + star.alpha + ')'; ctx.fill();
   }
-
   requestAnimationFrame(animate);
 }
 
-/* ═══════════════════════════════════════════════════════════
-   COLOR INTERPOLATION
-   ═══════════════════════════════════════════════════════════ */
+// Color interpolation
+let colorLerpActive = false, colorLerpStart = 0, colorLerpDuration = 5000;
+let colorLerpFrom = { r: 0, g: 0, b: 0 }, colorLerpTo = { r: 10, g: 10, b: 15 };
 
-let colorLerpActive = false;
-let colorLerpStart = 0;
-let colorLerpDuration = 5000;  // 5 seconds
-let colorLerpFrom = { r: 0, g: 0, b: 0 };
-let colorLerpTo = { r: 10, g: 10, b: 15 };
-
-function startColorLerp(from, to, duration) {
-  colorLerpFrom = from;
-  colorLerpTo = to;
-  colorLerpDuration = duration;
-  colorLerpActive = true;
-  colorLerpStart = performance.now();
-}
-
+function startColorLerp(from, to, duration) { colorLerpFrom = from; colorLerpTo = to; colorLerpDuration = duration; colorLerpActive = true; colorLerpStart = performance.now(); }
 function updateColorLerp() {
   if (!colorLerpActive) return;
-
   const elapsed = performance.now() - colorLerpStart;
   const t = Math.min(elapsed / colorLerpDuration, 1);
   bgColor = lerpColor(colorLerpFrom, colorLerpTo, t);
-
-  if (t >= 1) {
-    bgColor = { ...colorLerpTo };
-    colorLerpActive = false;
-  }
+  if (t >= 1) { bgColor = { ...colorLerpTo }; colorLerpActive = false; }
 }
-
-// Patch the animate loop to also update color lerp
 const _origAnimate = animate;
-animate = function(timestamp) {
-  updateColorLerp();
-  _origAnimate(timestamp);
-};
-
-/* ═══════════════════════════════════════════════════════════
-   FETCH: /api/time_color
-   ═══════════════════════════════════════════════════════════ */
+animate = function(timestamp) { updateColorLerp(); _origAnimate(timestamp); };
 
 async function fetchTimeColor() {
-  try {
-    const res = await fetch('/api/time_color');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    targetColor = hexToRgb(data.hex);
-  } catch (err) {
-    console.warn('Failed to fetch /api/time_color, using fallback:', err);
-    targetColor = { r: 10, g: 10, b: 15 };
-  }
-
-  // Start 5-second interpolation from current bg to target
+  try { const res = await fetch('/api/time_color'); if (!res.ok) throw new Error('HTTP ' + res.status); const data = await res.json(); targetColor = hexToRgb(data.hex); }
+  catch (err) { console.warn('Failed to fetch /api/time_color:', err); targetColor = { r: 10, g: 10, b: 15 }; }
   startColorLerp({ ...bgColor }, targetColor, 5000);
 }
 
 /* ═══════════════════════════════════════════════════════════
-   FETCH: /api/today
+   PANEL SYSTEM
    ═══════════════════════════════════════════════════════════ */
+const PanelSystem = {
+  _panels: {},    // panelId -> { zone, title, icon, render, refreshInterval }
+  _zones: {},     // zoneId -> { activePanelId, collapsed, hidden }
 
-async function fetchToday() {
-  try {
-    const res = await fetch('/api/today');
-    if (!res.ok) return;
-    const data = await res.json();
-    const list = document.getElementById('today-list');
-    const panel = document.getElementById('today-panel');
-    list.innerHTML = '';
-    if (data.items && data.items.length > 0) {
-      data.items.forEach(text => {
-        if (typeof text !== 'string') return;  // skip non-string entries
-        const li = document.createElement('li');
-        li.textContent = text;
-        list.appendChild(li);
+  register(panelId, config) {
+    this._panels[panelId] = { id: panelId, zone: config.zone, title: config.title, icon: config.icon, render: config.render, refreshInterval: config.refreshInterval || 0, defaultActive: config.defaultActive || false };
+  },
+
+  async init() {
+    // Build zone state map
+    ['tl','tr','bl','br'].forEach(zid => {
+      this._zones[zid] = { activePanelId: null, collapsed: false, hidden: false };
+    });
+
+    // Determine default active panel per zone (first registered, or restore from localStorage)
+    for (const [pid, p] of Object.entries(this._panels)) {
+      if (p.defaultActive && !this._zones[p.zone].activePanelId) {
+        this._zones[p.zone].activePanelId = pid;
+      }
+    }
+    // Fallback: first panel in each zone
+    for (const [pid, p] of Object.entries(this._panels)) {
+      if (!this._zones[p.zone].activePanelId) this._zones[p.zone].activePanelId = pid;
+    }
+
+    // Restore saved state
+    try {
+      const saved = JSON.parse(localStorage.getItem('hz_panels') || '{}');
+      for (const [zid, state] of Object.entries(saved)) {
+        if (this._zones[zid]) {
+          if (state.activePanelId && this._panels[state.activePanelId]) this._zones[zid].activePanelId = state.activePanelId;
+          if (state.collapsed) this._zones[zid].collapsed = true;
+          if (state.hidden) this._zones[zid].hidden = true;
+        }
+      }
+    } catch(e) {}
+
+    // Wire tab clicks
+    document.querySelectorAll('.zone-tab[data-panel]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const zoneEl = tab.closest('.zone');
+        const zoneId = zoneEl.id.replace('zone-', '');
+        this.activatePanel(zoneId, tab.dataset.panel);
       });
-      panel.classList.add('visible');
+    });
+
+    // Apply saved zone states
+    for (const [zid, state] of Object.entries(this._zones)) {
+      if (state.collapsed) this._applyCollapsed(zid, true);
+      if (state.hidden) this._applyHidden(zid, true);
+    }
+
+    // Initial render of all active panels
+    for (const [zid, state] of Object.entries(this._zones)) {
+      if (!state.collapsed && !state.hidden && state.activePanelId) {
+        await this._renderPanel(state.activePanelId);
+        this._updateTabs(zid, state.activePanelId);
+      }
+    }
+
+    this._startRefreshLoops();
+    this._saveState();
+  },
+
+  async activatePanel(zoneId, panelId) {
+    const zoneEl = document.getElementById('zone-' + zoneId);
+    if (!zoneEl) return;
+
+    // If zone is collapsed, expand it
+    if (this._zones[zoneId].collapsed) {
+      this._applyCollapsed(zoneId, false);
+      this._zones[zoneId].collapsed = false;
+    }
+    if (this._zones[zoneId].hidden) {
+      this._applyHidden(zoneId, false);
+      this._zones[zoneId].hidden = false;
+    }
+
+    this._zones[zoneId].activePanelId = panelId;
+
+    // Update tab active state
+    this._updateTabs(zoneId, panelId);
+
+    // Show the panel, hide siblings
+    const content = document.getElementById('zone-' + zoneId + '-content');
+    if (!content) return;
+    content.querySelectorAll('.zone-panel').forEach(p => {
+      if (p.dataset.panel === panelId) { p.classList.add('active'); p.style.display = 'block'; }
+      else { p.classList.remove('active'); p.style.display = 'none'; }
+    });
+
+    // Render the panel
+    await this._renderPanel(panelId);
+    this._saveState();
+  },
+
+  collapseZone(zoneId) {
+    const collapsed = !this._zones[zoneId].collapsed;
+    this._zones[zoneId].collapsed = collapsed;
+    this._applyCollapsed(zoneId, collapsed);
+    this._saveState();
+  },
+
+  toggleHidden(zoneId) {
+    const hidden = !this._zones[zoneId].hidden;
+    this._zones[zoneId].hidden = hidden;
+    this._applyHidden(zoneId, hidden);
+    this._saveState();
+  },
+
+  showZone(zoneId) {
+    // Called from pull tab
+    if (this._zones[zoneId].hidden) {
+      this._zones[zoneId].hidden = false;
+      this._applyHidden(zoneId, false);
+    }
+    if (this._zones[zoneId].collapsed) {
+      this._zones[zoneId].collapsed = false;
+      this._applyCollapsed(zoneId, false);
+    }
+    this._saveState();
+    // Re-render the active panel
+    if (this._zones[zoneId].activePanelId) {
+      this._updateTabs(zoneId, this._zones[zoneId].activePanelId);
+      this._renderPanel(this._zones[zoneId].activePanelId);
+    }
+  },
+
+  refreshPanel(panelId) {
+    return this._renderPanel(panelId);
+  },
+
+  // Internal
+  _applyCollapsed(zoneId, collapsed) {
+    const zoneEl = document.getElementById('zone-' + zoneId);
+    if (!zoneEl) return;
+    if (collapsed) zoneEl.classList.add('collapsed');
+    else zoneEl.classList.remove('collapsed');
+    // Update button icon (inverted for bottom zones since they collapse downward)
+    const btn = zoneEl.querySelector('.collapse-btn');
+    const isBottom = zoneId === 'bl' || zoneId === 'br';
+    if (btn) {
+      if (isBottom) { btn.innerHTML = collapsed ? '&#x25B4;' : '&#x25BE;'; }
+      else { btn.innerHTML = collapsed ? '&#x25BE;' : '&#x25B4;'; }
+    }
+  },
+
+  _applyHidden(zoneId, hidden) {
+    const zoneEl = document.getElementById('zone-' + zoneId);
+    const pullTab = document.getElementById('pull-' + zoneId);
+    if (!zoneEl || !pullTab) return;
+    if (hidden) { zoneEl.classList.add('hidden'); pullTab.classList.add('visible'); }
+    else { zoneEl.classList.remove('hidden'); pullTab.classList.remove('visible'); }
+  },
+
+  _updateTabs(zoneId, activePanelId) {
+    const tabsEl = document.getElementById('zone-' + zoneId + '-tabs');
+    if (!tabsEl) return;
+    tabsEl.querySelectorAll('.zone-tab[data-panel]').forEach(t => {
+      t.classList.toggle('active', t.dataset.panel === activePanelId);
+    });
+    // Update pull tab text
+    const pullTab = document.getElementById('pull-' + zoneId);
+    const panel = this._panels[activePanelId];
+    if (pullTab && panel) {
+      pullTab.innerHTML = (panel.icon || '') + ' ' + panel.title;
+    }
+  },
+
+  async _renderPanel(panelId) {
+    const panel = this._panels[panelId];
+    if (!panel || !panel.render) return;
+    const container = document.getElementById('panel-' + panelId);
+    if (!container) return;
+    try { await panel.render(container); } catch(e) { console.warn('Panel render error (' + panelId + '):', e); }
+  },
+
+  _startRefreshLoops() {
+    for (const [pid, p] of Object.entries(this._panels)) {
+      if (p.refreshInterval > 0) {
+        setInterval(() => {
+          const zoneId = p.zone;
+          const state = this._zones[zoneId];
+          if (!state || state.collapsed || state.hidden) return;
+          if (state.activePanelId !== pid) return;
+          this._renderPanel(pid);
+        }, p.refreshInterval);
+      }
+    }
+  },
+
+  _saveState() {
+    try {
+      const state = {};
+      for (const [zid, zs] of Object.entries(this._zones)) {
+        state[zid] = { activePanelId: zs.activePanelId, collapsed: zs.collapsed, hidden: zs.hidden };
+      }
+      localStorage.setItem('hz_panels', JSON.stringify(state));
+    } catch(e) {}
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+   API HELPERS
+   ═══════════════════════════════════════════════════════════ */
+async function fetchBoard() { try { const r = await fetch('/api/board'); return r.ok ? await r.json() : null; } catch(e) { return null; } }
+async function fetchGoals() { try { const r = await fetch('/api/goals'); return r.ok ? await r.json() : null; } catch(e) { return null; } }
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL: QUEST (zone-tl)
+   ═══════════════════════════════════════════════════════════ */
+PanelSystem.register('quest', {
+  zone: 'tl', title: 'Quest', icon: '🎯', defaultActive: true,
+  render: async function(container) {
+    if (container.dataset.ready) {
+      // Already rendered; just update activity indicator
+      if (window._questUpdateActivity) window._questUpdateActivity();
+      return;
+    }
+    container.innerHTML = `
+      <input type="text" id="main-quest-input" placeholder="What is your main quest today?" autocomplete="off" spellcheck="false">
+      <div class="quest-meta">
+        <span id="activity-indicator-inline" style="font-size:0.7rem;opacity:0.5;"></span>
+      </div>
+      <div style="margin-top:6px;display:flex;gap:6px;">
+        <button class="btn btn-sm" onclick="PanelSystem.toggleHidden('tl')" style="font-size:0.7rem;padding:4px 10px;">Hide</button>
+      </div>`;
+    container.dataset.ready = '1';
+
+    const input = document.getElementById('main-quest-input');
+    const saved = localStorage.getItem('horizon_main_quest');
+    if (saved) input.value = saved;
+    input.addEventListener('input', () => localStorage.setItem('horizon_main_quest', input.value));
+    input.addEventListener('change', () => localStorage.setItem('horizon_main_quest', input.value));
+
+    window._questUpdateActivity = function() {
+      const ind = document.getElementById('activity-indicator-inline');
+      if (!ind) return;
+      if (window._lastActivity) {
+        const d = window._lastActivity;
+        if (d.app_name === 'unknown') { ind.textContent = ''; return; }
+        let text = '🖥️ ' + (d.window_title ? d.window_title.substring(0, 35) : d.app_name);
+        if (d.idle_seconds > 60) { const m = Math.floor(d.idle_seconds / 60); text = '💤 Away (' + m + 'm)'; }
+        ind.textContent = text;
+      }
+    };
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL: FEED (zone-tl) — real n8n feed
+   ═══════════════════════════════════════════════════════════ */
+let _feedShowDismissed = false;
+
+const FEED_SOURCE_ICONS = {
+  'YouTube': '▶️', 'youtube': '▶️',
+  'LessWrong': '📄', 'lesswrong': '📄', 'lesswrong.com': '📄',
+  'Discord': '💬', 'discord': '💬',
+  'Twitter': '🐦', 'twitter': '🐦', 'X': '🐦',
+  'Reddit': '📊', 'reddit': '📊',
+  'RSS': '📡', 'rss': '📡',
+};
+
+function getFeedIcon(item) {
+  const name = item.source_name || '';
+  if (FEED_SOURCE_ICONS[name]) return FEED_SOURCE_ICONS[name];
+  if (name.toLowerCase().includes('youtube')) return '▶️';
+  if (name.toLowerCase().includes('discord')) return '💬';
+  if (name.toLowerCase().includes('twitter') || name.toLowerCase().includes('x.com')) return '🐦';
+  if (name.toLowerCase().includes('reddit')) return '📊';
+  if (name.toLowerCase().includes('less')) return '📄';
+  return '📡';
+}
+
+function getRelevanceClass(score) {
+  if (score >= 7) return 'high';
+  if (score >= 4) return 'medium';
+  return 'low';
+}
+
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return diffMin + 'm ago';
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return diffHr + 'h ago';
+    return Math.floor(diffHr / 24) + 'd ago';
+  } catch(e) { return ''; }
+}
+
+async function feedDismiss(itemId, cardEl) {
+  cardEl.classList.add('dismissing');
+  setTimeout(async () => {
+    try {
+      await fetch('/api/feed/items/' + itemId + '/dismiss', { method: 'PATCH' });
+      PanelSystem.refreshPanel('feed');
+    } catch(e) { cardEl.classList.remove('dismissing'); }
+  }, 250);
+}
+
+async function feedUndismiss(itemId) {
+  try {
+    await fetch('/api/feed/items/' + itemId + '/undismiss', { method: 'PATCH' });
+    PanelSystem.refreshPanel('feed');
+  } catch(e) {}
+}
+
+async function feedTriggerFetch(btnEl) {
+  if (!btnEl) return;
+  btnEl.disabled = true;
+  btnEl.innerHTML = '<span class="feed-pulse"></span>Fetching...';
+  try {
+    const res = await fetch('/api/feed/trigger', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json();
+      showToast(data.detail || 'Failed to trigger fetch');
     } else {
-      panel.classList.remove('visible');
+      showToast('Fetch triggered! Waiting for n8n...');
     }
-  } catch (err) {
-    console.warn('Failed to fetch /api/today:', err);
+  } catch(e) {
+    showToast('Could not reach server');
   }
+  setTimeout(() => PanelSystem.refreshPanel('feed'), 3000);
 }
 
-/* ═══════════════════════════════════════════════════════════
-   MAIN QUEST (localStorage)
-   ═══════════════════════════════════════════════════════════ */
-
-const questInput = document.getElementById('main-quest');
-
-function loadQuest() {
-  const saved = localStorage.getItem('horizon_main_quest');
-  if (saved) questInput.value = saved;
+function feedCardHtml(item) {
+  const icon = getFeedIcon(item);
+  const relevanceBarClass = getRelevanceClass(item.relevance_score);
+  const pct = Math.min(item.relevance_score * 10, 100);
+  const timeAgo = formatTimeAgo(item.created_at);
+  const tag = item.category ? '<span class="feed-card-tag">' + escapeHtml(item.category) + '</span>' : '';
+  const priorityTag = item.priority_level >= 70 ? '<span class="feed-card-tag" style="opacity:0.8;color:var(--accent-orange)">high</span>' :
+    item.priority_level >= 40 ? '<span class="feed-card-tag">medium</span>' : '';
+  const linkBtn = item.source_url ? '<button class="feed-card-action link" onclick="window.open(\'' + escapeHtml(item.source_url) + '\',\'_blank\')" title="Open link">🔗</button>' : '';
+  return '<div class="feed-card" data-id="' + item.id + '">' +
+    '<div class="feed-card-header">' +
+      '<span class="feed-card-icon">' + icon + '</span>' +
+      '<div class="feed-card-body">' +
+        '<div class="feed-card-title">' + escapeHtml(item.one_liner) + '</div>' +
+        '<div class="feed-card-meta">' +
+          (item.source_name ? '<span style="font-size:0.6rem;opacity:0.35;">' + escapeHtml(item.source_name) + '</span>' : '') +
+          tag + priorityTag +
+          '<span class="feed-card-relevance">' +
+            '<span class="feed-card-relevance-bar"><span class="feed-card-relevance-fill ' + relevanceBarClass + '" style="width:' + pct + '%"></span></span>' +
+            item.relevance_score.toFixed(1) +
+          '</span>' +
+          '<span style="font-size:0.6rem;opacity:0.25;">' + timeAgo + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="feed-card-actions">' +
+        linkBtn +
+        '<button class="feed-card-action dismiss" onclick="feedDismiss(' + item.id + ', this.closest(\'.feed-card\'))" title="Dismiss">✕</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
 }
 
-function saveQuest() {
-  localStorage.setItem('horizon_main_quest', questInput.value);
-}
+PanelSystem.register('feed', {
+  zone: 'tl', title: 'Feed', icon: '📡',
+  render: async function(container) {
+    let html = '<div class="feed-container">';
 
-questInput.addEventListener('input', saveQuest);
-questInput.addEventListener('change', saveQuest);
+    // Header
+    html += '<div class="feed-header" id="feed-header">';
+    html += '<div class="feed-header-info" id="feed-header-info">';
+    html += '<span id="feed-last-run"></span>';
+    html += '</div>';
+    html += '<button class="feed-btn" id="feed-fetch-btn" onclick="feedTriggerFetch(this)">Fetch Now</button>';
+    html += '</div>';
 
-/* ═══════════════════════════════════════════════════════════
-   CHAOS TAMER
-   ═══════════════════════════════════════════════════════════ */
+    // Items area
+    html += '<div class="feed-items" id="feed-items"></div>';
 
-const textarea = document.getElementById('chaos-textarea');
-const tameBtn = document.getElementById('tame-btn');
-const errorBanner = document.getElementById('error-banner');
-const loadingText = document.getElementById('loading-text');
-const cardsContainer = document.getElementById('cards-container');
+    // Footer
+    html += '<div class="feed-footer">';
+    html += '<button class="feed-footer-btn" id="feed-toggle-dismissed" onclick="_feedShowDismissed=!_feedShowDismissed;PanelSystem.refreshPanel(\'feed\')">Show dismissed</button>';
+    html += '</div>';
 
-function showError(msg) {
-  errorBanner.textContent = msg;
-  errorBanner.style.display = 'block';
-}
+    html += '</div>';
+    container.innerHTML = html;
 
-function hideError() {
-  errorBanner.style.display = 'none';
-}
+    // Fetch data
+    try {
+      const [itemsRes, statsRes] = await Promise.all([
+        fetch('/api/feed/items?dismissed=' + (_feedShowDismissed ? 'null' : 'false') + '&limit=50'),
+        fetch('/api/feed/stats')
+      ]);
 
-if (tameBtn) tameBtn.addEventListener('click', async () => {
-  hideError();
-  const raw = textarea.value.trim();
-  if (!raw) {
-    showError('Nothing to tame!');
-    return;
-  }
+      if (statsRes && statsRes.ok) {
+        const stats = await statsRes.json();
+        const lastRun = stats.last_run;
+        if (lastRun && lastRun.completed_at) {
+          document.getElementById('feed-last-run').textContent = 'Updated ' + formatTimeAgo(lastRun.completed_at);
+        } else if (lastRun && lastRun.status === 'running') {
+          document.getElementById('feed-last-run').innerHTML = '<span class="feed-pulse"></span>Fetching...';
+        } else {
+          document.getElementById('feed-last-run').textContent = 'No data yet';
+        }
 
-  tameBtn.disabled = true;
-  loadingText.style.display = 'block';
+        const toggleBtn = document.getElementById('feed-toggle-dismissed');
+        if (stats.dismissed_items > 0) {
+          toggleBtn.textContent = _feedShowDismissed ? 'Hide dismissed' : 'Show ' + stats.dismissed_items + ' dismissed';
+          toggleBtn.style.display = '';
+        } else {
+          toggleBtn.style.display = 'none';
+        }
+      }
 
-  try {
-    const res = await fetch('/api/classify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw_text: raw }),
-    });
+      if (itemsRes && itemsRes.ok) {
+        const data = await itemsRes.json();
+        const itemsEl = document.getElementById('feed-items');
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-      throw new Error(errData.detail || `Server error (${res.status})`);
+        if (data.items && data.items.length > 0) {
+          itemsEl.innerHTML = data.items.map(feedCardHtml).join('');
+        } else {
+          itemsEl.innerHTML = '<div class="empty-state">' +
+            (_feedShowDismissed ? 'No dismissed items.' : 'Feed is empty.') + '<br><br>' +
+            '<span style="font-size:0.7rem;opacity:0.4;">Trigger a fetch or wait for the scheduled one.</span></div>';
+        }
+      }
+    } catch(e) {
+      const itemsEl = document.getElementById('feed-items');
+      if (itemsEl) itemsEl.innerHTML = '<div class="empty-state">Could not load feed. Is the server running?</div>';
     }
-
-    const data = await res.json();
-    renderCards(data);
-  } catch (err) {
-    showError('Classification failed. Check your API key or try again.');
-    console.error('Classification error:', err);
-  } finally {
-    tameBtn.disabled = false;
-    loadingText.style.display = 'none';
-  }
+  },
+  refreshInterval: 30000  // fallback polling
 });
 
-/* ── Draggable Cards ──────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   PANEL: STATS (zone-tr)
+   ═══════════════════════════════════════════════════════════ */
+PanelSystem.register('stats', {
+  zone: 'tr', title: 'Stats', icon: '📊', defaultActive: true,
+  render: async function(container) {
+    let board = null, analysis = null, focusData = null;
+    try {
+      [board, analysis] = await Promise.all([
+        fetchBoard(),
+        fetch('/api/analysis').then(r => r.ok ? r.json() : null).catch(() => null)
+      ]);
+    } catch(e) {}
+    try {
+      const fr = await fetch('/api/activity/summary?period=today');
+      if (fr.ok) focusData = await fr.json();
+    } catch(e) {}
 
-function renderCards(data) {
-  cardsContainer.style.display = 'flex';
-  cardsContainer.innerHTML = '';
-
-  const columns = [
-    { key: 'now',   label: 'Now',   cssClass: 'column-now' },
-    { key: 'later', label: 'Later', cssClass: 'column-later' },
-    { key: 'trash', label: 'Trash', cssClass: 'column-trash' },
-  ];
-
-  for (const col of columns) {
-    const div = document.createElement('div');
-    div.className = `card-column ${col.cssClass}`;
-    div.dataset.column = col.key;
-
-    const h3 = document.createElement('h3');
-    h3.textContent = col.label;
-    div.appendChild(h3);
-
-    const items = data[col.key] || [];
-    for (const text of items) {
-      const card = document.createElement('div');
-      card.className = `chaos-card card-${col.key}`;
-      card.draggable = true;
-      card.textContent = text;
-      card.dataset.category = col.key;
-
-      // Drag start
-      card.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', text);
-        e.dataTransfer.effectAllowed = 'move';
-        card.classList.add('dragging');
+    let html = '';
+    if (board && board.stats) {
+      const s = board.stats;
+      html += '<div class="stat-item"><div class="stat-label">Completion</div><div class="stat-value">' + s.done + '/' + s.total_tasks + ' <span class="stat-sub">' + s.completion_rate + '%</span></div></div>';
+      html += '<div class="stat-item"><div class="stat-label">Active Goals</div><div class="stat-value">' + s.active_goals + '</div></div>';
+    }
+    if (analysis && analysis.nudges && analysis.nudges.length > 0) {
+      analysis.nudges.forEach(n => {
+        html += '<div class="nudge-item ' + (n.level || 'info') + '">' + escapeHtml(n.text) + '</div>';
       });
-
-      card.addEventListener('dragend', () => {
-        card.classList.remove('dragging');
-        document.querySelectorAll('.card-column').forEach(c => c.classList.remove('drag-over'));
+    }
+    // Focus bars
+    if (focusData && focusData.blocks && focusData.blocks.length > 0) {
+      html += '<div style="margin-top:6px;margin-bottom:4px;font-size:0.65rem;opacity:0.4;text-transform:uppercase;letter-spacing:0.1em;">Focus</div>';
+      focusData.blocks.forEach(b => {
+        const catColor = {focus:'#FFD700',distraction:'#e05050',neutral:'#888',idle:'#557',away:'#335'}[b.category] || '#FFD700';
+        html += '<div class="focus-bar-row" data-app="' + escapeHtml(b.app_name) + '" onclick="PanelSystem._toggleAppCategory(\'' + escapeHtml(b.app_name) + '\')">';
+        html += '<span class="focus-bar-label">' + escapeHtml((b.app_name||'').replace(/\.exe$/i,'').substring(0,8)) + '</span>';
+        html += '<div class="focus-bar-track"><div class="focus-bar-fill focus" style="width:' + Math.max(b.percentage,2) + '%;background:' + catColor + '"></div></div>';
+        html += '<span class="focus-bar-pct">' + b.percentage + '%</span></div>';
       });
-
-      div.appendChild(card);
     }
+    // Sunrise section
+    html += '<div class="sunrise-area">';
+    html += '<button id="sunrise-btn">☀️ Start Sunrise</button>';
+    html += '<button id="sunrise-gear" aria-label="Sunrise settings">⚙️</button>';
+    html += '</div>';
+    html += '<div class="sunrise-settings-inline" id="sunrise-settings-inline">';
+    html += '<label><span class="toggle-switch"><input type="checkbox" id="sunrise-toggle"><span class="toggle-slider"></span></span>Auto</label>';
+    html += '<input type="time" id="sunrise-time" value="07:00">';
+    html += '</div>';
 
-    // Drop zone
-    div.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      div.classList.add('drag-over');
-    });
+    container.innerHTML = html;
 
-    div.addEventListener('dragleave', () => {
-      div.classList.remove('drag-over');
-    });
-
-    div.addEventListener('drop', (e) => {
-      e.preventDefault();
-      div.classList.remove('drag-over');
-
-      const dragging = document.querySelector('.chaos-card.dragging');
-      if (dragging && div !== dragging.parentElement) {
-        // Clone the card, remove old, add to new column
-        const text = dragging.textContent;
-        const colKey = div.dataset.column;
-        const newCard = document.createElement('div');
-        newCard.className = `chaos-card card-${colKey}`;
-        newCard.draggable = true;
-        newCard.textContent = text;
-        newCard.dataset.category = colKey;
-
-        // Re-bind drag events
-        newCard.addEventListener('dragstart', (ev) => {
-          ev.dataTransfer.setData('text/plain', text);
-          ev.dataTransfer.effectAllowed = 'move';
-          newCard.classList.add('dragging');
-        });
-        newCard.addEventListener('dragend', () => {
-          newCard.classList.remove('dragging');
-          document.querySelectorAll('.card-column').forEach(c => c.classList.remove('drag-over'));
-        });
-
-        dragging.remove();
-        div.appendChild(newCard);
-      }
-    });
-
-    cardsContainer.appendChild(div);
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   SUNRISE
-   ═══════════════════════════════════════════════════════════ */
-
-const sunriseBtn = document.getElementById('sunrise-btn');
-const SUNRISE_DURATION = 60000;  // 60 seconds
-const SUNRISE_GOLD = { r: 255, g: 215, b: 0 };
-
-sunriseBtn.addEventListener('click', () => {
-  startSunriseSequence();
+    // Wire sunrise elements (they get recreated each render, so wire each time)
+    if (!container.dataset.sunriseWired) {
+      container.dataset.sunriseWired = '1';
+      // We need to wire these after DOM is settled
+    }
+    wireSunriseElements(container);
+  },
+  refreshInterval: 30000
 });
 
-/* ═══════════════════════════════════════════════════════════
-   AUTO-SUNRISE SCHEDULER
-   ═══════════════════════════════════════════════════════════ */
+// Helper to wire sunrise elements (called after stats render)
+function wireSunriseElements(container) {
+  const sunriseBtn = container.querySelector('#sunrise-btn');
+  const sunriseGear = container.querySelector('#sunrise-gear');
+  const sunriseSettings = container.querySelector('#sunrise-settings-inline');
+  const sunriseToggle = container.querySelector('#sunrise-toggle');
+  const sunriseTimeInput = container.querySelector('#sunrise-time');
 
-const sunriseGear = document.getElementById('sunrise-gear');
-const sunriseSettings = document.getElementById('sunrise-settings');
-const sunriseToggle = document.getElementById('sunrise-toggle');
-const sunriseTimeInput = document.getElementById('sunrise-time');
-
-let autoSunrisePollId = null;
-let autoSunriseLocalEnabled = false;
-let autoSunriseLocalTime = '07:00';
-
-// ── Settings panel toggle ──────────────────────────────
-
-sunriseGear.addEventListener('click', () => {
-  sunriseSettings.classList.toggle('visible');
-  sunriseGear.classList.toggle('active');
-  if (sunriseSettings.classList.contains('visible')) {
-    loadScheduleFromServer();
+  if (sunriseBtn && !sunriseBtn._wired) {
+    sunriseBtn._wired = true;
+    sunriseBtn.addEventListener('click', startSunriseSequence);
   }
-});
-
-// ── Load schedule from server ──────────────────────────
-
-async function loadScheduleFromServer() {
-  try {
-    const res = await fetch('/api/sunrise/schedule');
-    if (!res.ok) return;
-    const data = await res.json();
-    sunriseToggle.checked = data.enabled;
-    sunriseTimeInput.value = data.time;
-    autoSunriseLocalEnabled = data.enabled;
-    autoSunriseLocalTime = data.time;
-    saveAutoSunriseLocal();
-  } catch (err) {
-    console.warn('Failed to load sunrise schedule, using localStorage:', err);
-    loadAutoSunriseLocal();
-  }
-}
-
-// ── Save schedule to server ────────────────────────────
-
-async function saveScheduleToServer(enabled, time) {
-  try {
-    const res = await fetch('/api/sunrise/schedule', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled, time }),
+  if (sunriseGear && !sunriseGear._wired) {
+    sunriseGear._wired = true;
+    sunriseGear.addEventListener('click', () => {
+      if (sunriseSettings) { sunriseSettings.classList.toggle('open'); sunriseGear.classList.toggle('active'); }
+      if (sunriseSettings && sunriseSettings.classList.contains('open')) loadScheduleFromServer(sunriseToggle, sunriseTimeInput);
     });
-    if (!res.ok) {
-      console.warn('Failed to save sunrise schedule:', await res.text());
-    }
-  } catch (err) {
-    console.warn('Failed to save sunrise schedule:', err);
   }
-}
-
-// ── UI change handlers ─────────────────────────────────
-
-sunriseToggle.addEventListener('change', () => {
-  const enabled = sunriseToggle.checked;
-  const time = sunriseTimeInput.value || '07:00';
-  autoSunriseLocalEnabled = enabled;
-  autoSunriseLocalTime = time;
-  saveScheduleToServer(enabled, time);
-  saveAutoSunriseLocal();
-});
-
-sunriseTimeInput.addEventListener('change', () => {
-  const enabled = sunriseToggle.checked;
-  const time = sunriseTimeInput.value || '07:00';
-  autoSunriseLocalEnabled = enabled;
-  autoSunriseLocalTime = time;
-  saveScheduleToServer(enabled, time);
-  saveAutoSunriseLocal();
-});
-
-// ── localStorage fallback ──────────────────────────────
-
-function saveAutoSunriseLocal() {
-  try {
-    localStorage.setItem('horizon_auto_sunrise', JSON.stringify({
-      enabled: autoSunriseLocalEnabled,
-      time: autoSunriseLocalTime,
-    }));
-  } catch (err) {
-    console.warn('localStorage quota exceeded for auto-sunrise:', err);
-  }
-}
-
-function loadAutoSunriseLocal() {
-  try {
-    const saved = localStorage.getItem('horizon_auto_sunrise');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (typeof parsed.enabled === 'boolean') {
-        autoSunriseLocalEnabled = parsed.enabled;
-        sunriseToggle.checked = parsed.enabled;
-      }
-      if (typeof parsed.time === 'string') {
-        autoSunriseLocalTime = parsed.time;
-        sunriseTimeInput.value = parsed.time;
-      }
-    }
-  } catch (err) {
-    console.warn('Failed to load auto-sunrise from localStorage:', err);
-  }
-}
-
-// ── Polling: check server for sunrise trigger ──────────
-
-async function checkSunriseTrigger() {
-  try {
-    const res = await fetch('/api/sunrise/schedule');
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.sunrise_triggered) {
-      console.log('Auto-sunrise triggered by server!');
-      startSunriseSequence();
-    }
-  } catch (err) {
-    // Server unreachable — fall back to local time check
-    checkLocalSunriseTime();
-  }
-}
-
-// ── Local time fallback ────────────────────────────────
-
-function checkLocalSunriseTime() {
-  if (!autoSunriseLocalEnabled) return;
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const [h, m] = autoSunriseLocalTime.split(':').map(Number);
-  const targetMinutes = h * 60 + m;
-
-  if (currentMinutes === targetMinutes) {
-    const todayKey = now.toDateString();
-    const lastTrigger = localStorage.getItem('horizon_last_sunrise_date');
-    if (lastTrigger !== todayKey) {
-      try {
-        localStorage.setItem('horizon_last_sunrise_date', todayKey);
-      } catch (err) {
-        console.warn('localStorage quota exceeded:', err);
-      }
-      console.log('Auto-sunrise triggered by local time!');
-      startSunriseSequence();
-    }
-  }
-}
-
-// ── Start sunrise (reusable for both manual and auto) ──
-
-function startSunriseSequence() {
-  if (sunriseActive) return;
-  sunriseActive = true;
-  sunriseBtn.disabled = true;
-  document.body.classList.add('sunrise-active');
-
-  // Countdown timer — updates button text each second
-  let remainingSeconds = Math.ceil(SUNRISE_DURATION / 1000);
-  sunriseBtn.textContent = `☀️ ${remainingSeconds}s`;
-  const countdownId = setInterval(() => {
-    remainingSeconds--;
-    if (remainingSeconds > 0) {
-      sunriseBtn.textContent = `☀️ ${remainingSeconds}s`;
-    }
-  }, 1000);
-
-  // Shared cleanup (called from both success and error paths)
-  function cleanupSunrise() {
-    clearInterval(countdownId);
-    sunriseActive = false;
-    sunriseBtn.disabled = false;
-    sunriseBtn.textContent = '☀️ Start Sunrise';
-    document.body.classList.remove('sunrise-active');
-    fetchTimeColor();  // restore time-aware background
-  }
-
-  // 1. Visual: lerp to gold over 60s
-  const startBg = { ...bgColor };
-  startColorLerp(startBg, SUNRISE_GOLD, SUNRISE_DURATION);
-
-  // 2. Audio: Web Audio API sine wave 440Hz → 880Hz
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioCtx();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
-    oscillator.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + SUNRISE_DURATION / 1000);
-
-    const fadeInEnd = audioCtx.currentTime + 2;
-    const fadeOutStart = audioCtx.currentTime + (SUNRISE_DURATION / 1000) - 5;
-    const endTime = audioCtx.currentTime + SUNRISE_DURATION / 1000;
-
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.15, fadeInEnd);
-    gainNode.gain.setValueAtTime(0.15, fadeOutStart);
-    gainNode.gain.linearRampToValueAtTime(0, endTime);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(endTime);
-
-    setTimeout(() => {
-      cleanupSunrise();
-      audioCtx.close().catch(() => {});
-    }, SUNRISE_DURATION + 200);
-  } catch (err) {
-    console.warn('Web Audio not available for auto-sunrise:', err);
-    setTimeout(cleanupSunrise, SUNRISE_DURATION + 200);
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   ACTIVITY TRACKING (v0.2)
-   ═══════════════════════════════════════════════════════════ */
-
-const activityIndicator = document.getElementById('activity-indicator');
-const focusBars = document.getElementById('focus-bars');
-let activityPollId = null;
-
-// ── Bridge detection ──────────────────────────────────
-const hasJsApi = typeof pywebview !== 'undefined' && pywebview.api;
-
-// ── Update activity indicator ─────────────────────────
-function updateActivityIndicator(data) {
-  if (!activityIndicator) return;
-  if (!data || data.app_name === 'unknown') {
-    activityIndicator.classList.remove('visible');
-    return;
-  }
-
-  let text = '\uD83D\uDDA5\uFE0F ';
-  // Use window title for better readability
-  if (data.window_title) {
-    text += data.window_title.substring(0, 30);
-  } else {
-    text += data.app_name;
-  }
-
-  if (data.idle_seconds > 60) {
-    const mins = Math.floor(data.idle_seconds / 60);
-    text = '\uD83D\uDCA4 Away (' + mins + 'm)';
-    activityIndicator.classList.add('idle');
-  } else {
-    activityIndicator.classList.remove('idle');
-  }
-
-  activityIndicator.textContent = text;
-  activityIndicator.classList.add('visible');
-  activityIndicator.classList.add('pulse');
-  setTimeout(() => activityIndicator.classList.remove('pulse'), 2000);
-}
-
-// ── Update focus panel ────────────────────────────────
-function updateFocusPanel(data) {
-  if (!focusBars) return;
-  focusBars.innerHTML = '';
-
-  if (!data || !data.blocks || data.blocks.length === 0) {
-    document.getElementById('focus-panel').classList.remove('visible');
-    // Show placeholder when no activity data
-    const emptyMsg = document.createElement('div');
-    emptyMsg.style.cssText = 'opacity:0.4;font-size:0.75rem;padding:8px 0;';
-    emptyMsg.textContent = 'No activity data yet. Start using your computer!';
-    focusBars.appendChild(emptyMsg);
-    return;
-  }
-
-  document.getElementById('focus-panel').classList.add('visible');
-
-  for (const block of data.blocks) {
-    const row = document.createElement('div');
-    row.className = 'focus-bar-row';
-    row.dataset.appName = block.app_name;
-
-    const label = document.createElement('span');
-    label.className = 'focus-bar-label';
-    label.textContent = block.app_name.replace(/\.exe$/i, '').substring(0, 10);
-
-    const track = document.createElement('div');
-    track.className = 'focus-bar-track';
-
-    const fill = document.createElement('div');
-    fill.className = 'focus-bar-fill focus';
-    fill.style.width = Math.max(block.percentage, 2) + '%';
-    fill.style.backgroundColor = getCategoryColor(block.category || 'focus');
-
-    const pct = document.createElement('span');
-    pct.className = 'focus-bar-pct';
-    pct.textContent = block.percentage + '%';
-
-    track.appendChild(fill);
-    row.appendChild(label);
-    row.appendChild(track);
-    row.appendChild(pct);
-
-    row.addEventListener('click', () => {
-      toggleAppCategory(row.dataset.appName);
+  if (sunriseToggle && !sunriseToggle._wired) {
+    sunriseToggle._wired = true;
+    sunriseToggle.addEventListener('change', () => {
+      const enabled = sunriseToggle.checked;
+      const time = (sunriseTimeInput && sunriseTimeInput.value) || '07:00';
+      autoSunriseLocalEnabled = enabled; autoSunriseLocalTime = time;
+      saveScheduleToServer(enabled, time); saveAutoSunriseLocal();
     });
-
-    focusBars.appendChild(row);
   }
-
-  // Hide the old today-list if focus panel is shown
-  const todayList = document.getElementById('today-list');
-  if (todayList) todayList.style.display = 'none';
+  if (sunriseTimeInput && !sunriseTimeInput._wired) {
+    sunriseTimeInput._wired = true;
+    sunriseTimeInput.addEventListener('change', () => {
+      const enabled = sunriseToggle ? sunriseToggle.checked : false;
+      const time = sunriseTimeInput.value || '07:00';
+      autoSunriseLocalEnabled = enabled; autoSunriseLocalTime = time;
+      saveScheduleToServer(enabled, time); saveAutoSunriseLocal();
+    });
+  }
+  // Restore schedule state
+  loadScheduleFromServer(sunriseToggle, sunriseTimeInput);
 }
 
-function getCategoryColor(category) {
-  const colors = {
-    'focus': '#FFD700',
-    'distraction': '#e05050',
-    'neutral': '#888',
-    'idle': '#557',
-    'away': '#335'
-  };
-  return colors[category] || '#FFD700';
-}
-
-async function toggleAppCategory(appName) {
+PanelSystem._toggleAppCategory = async function(appName) {
   try {
-    // Simple cycle: focus -> distraction -> neutral -> focus
     const res = await fetch('/api/activity/categories');
     const data = await res.json();
-    const existing = data.categories.find(c => c.app_name === appName);
+    const existing = (data.categories || []).find(c => c.app_name === appName);
     const cycle = { 'focus': 'distraction', 'distraction': 'neutral', 'neutral': 'focus', 'idle': 'focus', 'away': 'focus' };
     const nextCat = cycle[existing ? existing.category : 'focus'] || 'focus';
-    await fetch('/api/activity/categories', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ app_name: appName, category: nextCat })
-    });
-    // Refresh focus panel
-    await fetchAndDisplayFocusSummary();
-  } catch (err) {
-    console.warn('Failed to toggle app category:', err);
-  }
-}
-
-async function fetchAndDisplayFocusSummary() {
-  try {
-    const res = await fetch('/api/activity/summary?period=today');
-    if (!res.ok) return;
-    const data = await res.json();
-    updateFocusPanel(data);
-  } catch (err) {
-    console.warn('Failed to fetch focus summary:', err);
-  }
-}
-
-// ── Polling fallback ──────────────────────────────────
-async function fetchActivityNow() {
-  try {
-    const res = await fetch('/api/activity/now');
-    if (!res.ok) return;
-    const data = await res.json();
-    updateActivityIndicator(data);
-  } catch (err) {
-    console.warn('Failed to fetch activity:', err);
-  }
-}
-
-function startActivityPolling() {
-  if (activityPollId) clearInterval(activityPollId);
-  activityPollId = setInterval(fetchActivityNow, 30000);
-  fetchActivityNow();
-}
-
-// ── SSE client ────────────────────────────────────────
-let activitySSE = null;
-
-function startActivityTracking() {
-  if (hasJsApi) {
-    // Desktop bridge — try bridge first, fall back to SSE
-    console.log('PyWebView bridge detected — using JS API');
-    startActivityPolling();
-    return;
-  }
-
-  try {
-    activitySSE = new EventSource('/api/activity/stream');
-
-    activitySSE.addEventListener('activity', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        updateActivityIndicator(data);
-        // Refresh focus panel periodically (not on every activity event)
-      } catch (err) {
-        console.warn('Failed to parse activity SSE data:', err);
-      }
-    });
-
-    activitySSE.addEventListener('error', () => {
-      // SSE disconnected — fall back to polling
-      activitySSE.close();
-      activitySSE = null;
-      console.log('SSE disconnected — falling back to polling');
-      startActivityPolling();
-    });
-  } catch (err) {
-    console.warn('SSE not available — using polling:', err);
-    startActivityPolling();
-  }
-
-  // Poll focus summary every 30s alongside SSE
-  setInterval(fetchAndDisplayFocusSummary, 30000);
-  // Also fetch on initial load
-  setTimeout(fetchAndDisplayFocusSummary, 2000);
-}
-
-// ── Start polling on page load ─────────────────────────
-
-function startAutoSunrisePolling() {
-  // Load schedule from server or localStorage
-  loadScheduleFromServer();
-
-  // Poll server every 15s for sunrise trigger
-  autoSunrisePollId = setInterval(checkSunriseTrigger, 15000);
-
-  // Also check local time every 30s as backup
-  setInterval(checkLocalSunriseTime, 30000);
-}
+    await fetch('/api/activity/categories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_name: appName, category: nextCat }) });
+    PanelSystem.refreshPanel('stats');
+  } catch(e) { console.warn('Toggle category failed:', e); }
+};
 
 /* ═══════════════════════════════════════════════════════════
-   INIT
+   PANEL: KANBAN (zone-bl)
    ═══════════════════════════════════════════════════════════ */
+PanelSystem.register('kanban', {
+  zone: 'bl', title: 'Kanban', icon: '📋', defaultActive: true,
+  render: async function(container) {
+    if (!container.dataset.ready) {
+      container.innerHTML = `
+        <div class="chaos-strip">
+          <div class="chaos-toggle" onclick="this.nextElementSibling.classList.toggle('open')">Capture thoughts...</div>
+          <div class="chaos-body">
+            <textarea id="chaos-textarea-kb" rows="1" placeholder="Ideas, URLs, notes..."></textarea>
+            <button class="btn btn-sm" id="tame-btn-kb">Tame</button>
+          </div>
+          <div id="chaos-result-area-kb"></div>
+        </div>
+        <div class="kanban-board-inner" id="kanban-inner">
+          <div class="kanban-column" data-status="today"><div class="kanban-column-header">Today</div><div class="kanban-cards" id="col-today" ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')"></div><div class="quick-add-area"><button class="quick-add-btn" id="add-task-btn">+ Task</button><div class="quick-add-input"><input type="text" id="quick-task-input" placeholder="Task title..."></div></div></div>
+          <div class="kanban-column" data-status="doing"><div class="kanban-column-header">Doing</div><div class="kanban-cards" id="col-doing" ondragover="allowDrop(event)" ondrop="dropTask(event,'doing')"></div></div>
+          <div class="kanban-column" data-status="done"><div class="kanban-column-header">Done</div><div class="kanban-cards" id="col-done" ondragover="allowDrop(event)" ondrop="dropTask(event,'done')"></div></div>
+          <div class="kanban-column" data-status="overdue"><div class="kanban-column-header">Overdue</div><div class="kanban-cards" id="col-overdue" ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')"></div></div>
+        </div>
+        <div class="kanban-strip" id="kanban-strip">
+          <div class="strip-zone" id="zone-inbox" ondragover="allowDrop(event)" ondrop="dropTask(event,'pending')">
+            <div class="zone-label" style="margin-bottom:2px">📥 New Cards</div>
+            <div class="inbox-stack" id="inbox-stack">
+              <div class="inbox-shadow"></div><div class="inbox-shadow"></div>
+              <div id="inbox-card" class="goal-card inbox-blank" draggable="true" ondragstart="dragNewCard(event)" ondragend="onInboxDragEnd(event)"><div class="card-title">New card</div></div>
+            </div>
+          </div>
+          <div class="strip-zone" id="zone-trash" ondragover="allowDrop(event)" ondrop="trashTask(event)"><div class="zone-icon">🗑️</div><div class="zone-label">Trash</div></div>
+          <div class="strip-zone strip-capture" id="zone-capture-kb"><div class="zone-icon">💭</div><textarea id="capture-input-kb" rows="1" placeholder="Quick thought..."></textarea><button class="btn btn-sm" onclick="captureThoughtKb()">Tame</button></div>
+        </div>`;
+      container.dataset.ready = '1';
 
+      // Wire event listeners
+      setTimeout(() => {
+        const tameBtn2 = document.getElementById('tame-btn-kb');
+        if (tameBtn2) tameBtn2.addEventListener('click', async () => {
+          const ta = document.getElementById('chaos-textarea-kb');
+          if (!ta || !ta.value.trim()) return;
+          try { const r = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:ta.value.trim()})}); if(r.ok){ta.value='';showToast('Classified!');renderKanbanContent();} } catch(e){showToast('Failed');}
+        });
 
-// KANBAN BOARD FUNCTIONS
-async function fetchBoard() {
-  try { const r = await fetch('/api/board'); return r.ok ? await r.json() : null; } catch(e) { return null; }
-}
-function escapeHtml(s) {
-  var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
-}
-function renderKanban(board) {
+        const addTaskBtn = document.getElementById('add-task-btn');
+        if (addTaskBtn) addTaskBtn.addEventListener('click', () => { const inp = document.getElementById('quick-task-input'); if(inp){inp.parentElement.classList.toggle('open');inp.focus();} });
+        const qti = document.getElementById('quick-task-input');
+        if (qti) qti.addEventListener('keydown', async function(e) {
+          if (e.key==='Enter' && this.value.trim()) {
+            try { await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:this.value.trim(),type:'long_term'})}); this.value=''; this.parentElement.classList.remove('open'); showToast('Created!'); renderKanbanContent(); } catch(e) { showToast('Failed'); }
+          }
+        });
+
+      }, 100);
+    }
+    await renderKanbanContent();
+  },
+  refreshInterval: 30000
+});
+
+async function renderKanbanContent() {
+  const board = await fetchBoard();
   if (!board) return;
-  var cols = {today:'col-today',doing:'col-doing',done:'col-done',overdue:'col-overdue'};
-  for (var k in cols) {
-    var col = document.getElementById(cols[k]); if (!col) continue;
-    var cards = board.columns[k] || [];
+  // Render columns
+  const cols = {today:'col-today',doing:'col-doing',done:'col-done',overdue:'col-overdue'};
+  for (const k in cols) {
+    const col = document.getElementById(cols[k]); if (!col) continue;
+    const cards = board.columns[k] || [];
     col.innerHTML = cards.map(function(t) {
-      var color = localStorage.getItem('card_color_'+t.id) || '';
-      var cls = 'goal-card' + (t.status==='done'?' done':'') + (t.goal_type?' type-'+t.goal_type:'') + (color?' color-'+color:'');
-      var meta = t.goal_title ? '<div class="card-meta">'+escapeHtml(t.goal_title)+'</div>' : '';
-      var actions = '<span class="card-actions">' +
+      const color = localStorage.getItem('card_color_'+t.id) || '';
+      const cls = 'goal-card' + (t.status==='done'?' done':'') + (t.goal_type?' type-'+t.goal_type:'') + (color?' color-'+color:'');
+      const meta = t.goal_title ? '<div class="card-meta">'+escapeHtml(t.goal_title)+'</div>' : '';
+      const actions = '<span class="card-actions">' +
         '<button class="btn-split" title="Color" onclick="event.stopPropagation();cycleCardColor(event,'+t.id+')">🎨</button>' +
         '<button class="btn-split" title="Split" onclick="event.stopPropagation();splitTask('+t.id+')">✂</button>' +
         '</span>';
       return '<div class="'+cls+'" draggable="true" data-task-id="'+t.id+'" data-status="'+t.status+'" ondragstart="dragTask(event,'+t.id+',&quot;'+t.status+'&quot;)" onclick="editCard(event,'+t.id+')">'+actions+'<div class="card-title">'+escapeHtml(t.title)+'</div>'+meta+'</div>';
     }).join('');
   }
-  var statsEl = document.getElementById('stats-content');
-  if (statsEl && board.stats) {
-    var s = board.stats;
-    var h = '<div class="stat-item"><div class="stat-label">Done</div><div class="stat-value">'+s.done+'/'+s.total_tasks+'</div></div>';
-    h += '<div class="stat-item"><div class="stat-label">Rate</div><div class="stat-value">'+s.completion_rate+'%</div></div>';
-    statsEl.innerHTML = h;
-  }
-  document.getElementById('kanban-board').classList.add('visible');
-  var strip = document.getElementById('bottom-strip');
-  if (strip) strip.classList.add('visible');
 }
-async function editCard(e, id) {
+
+// Kanban card interactions
+var CARD_COLORS = ['blue','green','orange','purple','gold','red','teal','pink'];
+function cycleCardColor(e, id) { e.stopPropagation(); var cur = localStorage.getItem('card_color_'+id) || ''; var idx = CARD_COLORS.indexOf(cur); localStorage.setItem('card_color_'+id, CARD_COLORS[(idx+1)%CARD_COLORS.length]); renderKanbanContent(); }
+async function splitTask(id) { try { var r = await fetch('/api/tasks/'+id+'/split',{method:'POST'}); if(r.ok){showToast('Split!');renderKanbanContent();} else {showToast('AI not available');} } catch(e) {} }
+function editCard(e, id) {
   var card = e.currentTarget;
   var titleEl = card.querySelector('.card-title');
   if (!titleEl || card.querySelector('input')) return;
   var inp = document.createElement('input');
-  inp.className = 'card-edit-input';
-  inp.value = titleEl.textContent;
+  inp.className = 'card-edit-input'; inp.value = titleEl.textContent;
   inp.onblur = function() { saveCardTitle(id, inp.value, card, titleEl); };
-  inp.onkeydown = function(ev) {
-    if (ev.key==='Enter') { ev.preventDefault(); inp.blur(); }
-    if (ev.key==='Escape') { titleEl.style.display=''; inp.remove(); }
-  };
-  titleEl.style.display = 'none';
-  card.insertBefore(inp, titleEl);
-  inp.focus(); inp.select();
+  inp.onkeydown = function(ev) { if (ev.key==='Enter') { ev.preventDefault(); inp.blur(); } if (ev.key==='Escape') { titleEl.style.display=''; inp.remove(); } };
+  titleEl.style.display = 'none'; card.insertBefore(inp, titleEl); inp.focus(); inp.select();
 }
 function saveCardTitle(id, newTitle, card, titleEl) {
-  var inp = card.querySelector('input');
-  if (!inp) return;
+  var inp = card.querySelector('input'); if (!inp) return;
   var title = inp.value.trim() || titleEl.textContent;
   inp.remove(); titleEl.style.display = ''; titleEl.textContent = title;
-  fetch('/api/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:title})}).then(function(){refreshBoard();}).catch(function(){});
+  fetch('/api/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:title})}).then(function(){renderKanbanContent();}).catch(function(){});
 }
-var CARD_COLORS = ['blue','green','orange','purple','gold','red','teal','pink'];
-function cycleCardColor(e, id) {
-  e.stopPropagation();
-  var cur = localStorage.getItem('card_color_'+id) || '';
-  var idx = CARD_COLORS.indexOf(cur);
-  localStorage.setItem('card_color_'+id, CARD_COLORS[(idx+1)%CARD_COLORS.length]);
-  refreshBoard();
-}
-async function splitTask(id) {
-  try { var r = await fetch('/api/tasks/'+id+'/split',{method:'POST'}); if(r.ok){showToast('Split!');refreshBoard();} else {showToast('AI not available');} } catch(e) {}
-}
-async function refreshBoard() {
-  var board = await fetchBoard();
-  if (board) {
-    try { board.analysis = await (await fetch('/api/analysis')).json(); } catch(e) {}
-  }
-  renderKanban(board);
-}
-// ── Drag-and-drop between kanban columns ───────────────
+
+// Drag and drop
 var dragData = null;
-function dragTask(e, taskId, status) {
-  dragData = { id: taskId, from: status };
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', String(taskId));
-}
+function dragTask(e, taskId, status) { dragData = { id: taskId, from: status }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(taskId)); }
 async function dragNewCard(e) {
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', 'new');
+  e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'new');
   try {
     var gr = await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'New card',type:'long_term'})});
-    if(gr.ok){
-      var goal = await gr.json();
-      var tr = await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal_id:goal.id,title:'New card'})});
-      if(tr.ok){ var task = await tr.json(); dragData = { id: task.id, from: 'inbox', newCard: true }; }
-    }
+    if(gr.ok){ var goal = await gr.json(); var tr = await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal_id:goal.id,title:'New card'})}); if(tr.ok){ var task = await tr.json(); dragData = { id: task.id, from: 'inbox', newCard: true }; } }
   } catch(e) {}
 }
 function onInboxDragEnd(e) {
-  if (dragData && dragData.newCard && !dragData.consumed) {
-    fetch('/api/tasks/'+dragData.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'skipped'})}).catch(function(){});
-  }
-  dragData = null;
-  renderInboxCard();
+  if (dragData && dragData.newCard && !dragData.consumed) { fetch('/api/tasks/'+dragData.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'skipped'})}).catch(function(){}); }
+  dragData = null; renderInboxCard();
 }
 function renderInboxCard() {
-  var s = document.getElementById('inbox-stack');
-  if(!s) return;
-  s.innerHTML = '<div class="inbox-shadow"></div><div class="inbox-shadow"></div>' +
-    '<div id="inbox-card" class="goal-card inbox-blank" draggable="true" ' +
-    'ondragstart="dragNewCard(event)" ondragend="onInboxDragEnd(event)">' +
-    '<div class="card-title">New card</div></div>';
+  var s = document.getElementById('inbox-stack'); if(!s) return;
+  s.innerHTML = '<div class="inbox-shadow"></div><div class="inbox-shadow"></div><div id="inbox-card" class="goal-card inbox-blank" draggable="true" ondragstart="dragNewCard(event)" ondragend="onInboxDragEnd(event)"><div class="card-title">New card</div></div>';
 }
 function allowDrop(e) { e.preventDefault(); }
 async function dropTask(e, newStatus) {
-  e.preventDefault();
-  if (!dragData) return;
-  var taskId = dragData.id;
-  var fromStatus = dragData.from;
-  dragData.consumed = true;
+  e.preventDefault(); if (!dragData) return;
+  var taskId = dragData.id; dragData.consumed = true;
   try {
     var dropPayload = {status: newStatus};
-    // When dropping to Today (pending) or Doing, also carry the task to today's date
-    if (newStatus === 'pending' || newStatus === 'doing') {
-      var d = new Date();
-      var y = d.getFullYear();
-      var m = String(d.getMonth()+1).padStart(2,'0');
-      var day = String(d.getDate()).padStart(2,'0');
-      dropPayload.date = y+'-'+m+'-'+day;
-    }
+    if (newStatus === 'pending' || newStatus === 'doing') { var d = new Date(); dropPayload.date = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
     await fetch('/api/tasks/'+taskId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(dropPayload)});
-    refreshBoard();
+    renderKanbanContent(); PanelSystem.refreshPanel('stats'); PanelSystem.refreshPanel('goals');
   } catch(err) { console.warn('Drop failed:', err); }
   dragData = null;
 }
 async function trashTask(e) {
-  e.preventDefault();
-  if (!dragData) return;
-  dragData.consumed = true;
-  var taskId = dragData.id;
-  try {
-    await fetch('/api/tasks/'+taskId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'skipped'})});
-    showToast('Trashed!');
-    refreshBoard();
-  } catch(err) { console.warn('Trash failed:', err); }
+  e.preventDefault(); if (!dragData) return;
+  dragData.consumed = true; var taskId = dragData.id;
+  try { await fetch('/api/tasks/'+taskId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'skipped'})}); showToast('Trashed!'); renderKanbanContent(); } catch(err) { console.warn('Trash failed:', err); }
   dragData = null;
 }
-async function captureThought() {
-  var inp = document.getElementById('capture-input');
-  if (!inp || !inp.value.trim()) return;
+async function captureThoughtKb() {
+  var inp = document.getElementById('capture-input-kb'); if (!inp || !inp.value.trim()) return;
+  try { var r = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:inp.value.trim()})}); if(r.ok){inp.value='';showToast('Tamed!');renderKanbanContent();} else {showToast('AI failed');} } catch(e) { showToast('Failed'); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL: GOALS (zone-bl) — THE FIX FOR TODAY'S PROBLEM
+   ═══════════════════════════════════════════════════════════ */
+PanelSystem.register('goals', {
+  zone: 'bl', title: 'Goals', icon: '🎯',
+  render: async function(container) {
+    const data = await fetchGoals();
+    if (!data || !data.goals || data.goals.length === 0) {
+      container.innerHTML = '<div class="empty-state">No goals yet!<br><br>Create one from the Kanban tab or click "+ Goal" in the Stats column.</div>';
+      return;
+    }
+
+    const goals = data.goals.filter(g => !g.archived);
+    if (goals.length === 0) {
+      container.innerHTML = '<div class="empty-state">All goals archived. Create a new one!</div>';
+      return;
+    }
+
+    container.innerHTML = goals.map(g => {
+      const pct = g.progress_pct || 0;
+      let fillClass = '';
+      if (pct > 66) fillClass = 'high'; else if (pct < 25 && pct > 0) fillClass = 'low';
+      const typeLabel = g.type.replace('_', ' ');
+      const paused = g.paused ? ' paused' : '';
+      const meta = [];
+      if (g.target_days) meta.push('Target: ' + g.target_days + ' days');
+      if (g.frequency && g.frequency !== 'daily') meta.push(g.frequency);
+
+      return '<div class="goal-panel-card type-' + g.type + paused + '">' +
+        '<div class="goal-panel-header">' +
+          '<span class="goal-panel-title">' + escapeHtml(g.title) + '</span>' +
+          '<span class="goal-panel-type">' + typeLabel + '</span>' +
+        '</div>' +
+        '<div class="goal-panel-progress">' +
+          '<div class="progress-bar"><div class="progress-fill ' + fillClass + '" style="width:' + pct + '%"></div></div>' +
+          '<span class="goal-panel-pct">' + pct + '%</span>' +
+        '</div>' +
+        (meta.length > 0 ? '<div class="goal-panel-meta">' + meta.join(' · ') + '</div>' : '') +
+        '<div class="goal-panel-actions">' +
+          '<button onclick="updateGoalProgress(' + g.id + ', prompt(\'Progress %? (0-100)\',\'' + pct + '\'))">Set Progress</button>' +
+          '<button onclick="togglePauseGoal(' + g.id + ',' + (g.paused ? 1 : 0) + ')">' + (g.paused ? 'Resume' : 'Pause') + '</button>' +
+          '<button class="danger" onclick="archiveGoal(' + g.id + ')">Archive</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+    '<div style="margin-top:8px;text-align:center;">' +
+      '<button class="btn btn-sm" onclick="PanelSystem.activatePanel(\'bl\',\'goals\');showToast(\'Create a goal from the Kanban + Task button\')">+ New Goal</button>' +
+    '</div>';
+  }
+});
+
+// Goal action functions
+async function updateGoalProgress(goalId, pctStr) {
+  const pct = parseFloat(pctStr);
+  if (isNaN(pct) || pct < 0 || pct > 100) return;
   try {
-    var r = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:inp.value.trim()})});
-    if(r.ok){inp.value='';showToast('Tamed!');refreshBoard();} else {showToast('AI failed');}
+    await fetch('/api/goals/' + goalId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ progress_pct: pct }) });
+    showToast('Progress updated to ' + pct + '%');
+    PanelSystem.refreshPanel('goals');
+  } catch(e) { showToast('Failed to update progress'); }
+}
+async function togglePauseGoal(goalId, currentPaused) {
+  try {
+    await fetch('/api/goals/' + goalId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: currentPaused ? false : true }) });
+    showToast(currentPaused ? 'Goal resumed!' : 'Goal paused');
+    PanelSystem.refreshPanel('goals');
   } catch(e) { showToast('Failed'); }
 }
+async function archiveGoal(goalId) {
+  if (!confirm('Archive this goal? It will be hidden but not deleted.')) return;
+  try {
+    await fetch('/api/goals/' + goalId, { method: 'DELETE' });
+    showToast('Goal archived');
+    PanelSystem.refreshPanel('goals');
+    renderKanbanContent();
+  } catch(e) { showToast('Failed to archive'); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL: CHAT (zone-br placeholder)
+   ═══════════════════════════════════════════════════════════ */
+PanelSystem.register('chat', {
+  zone: 'br', title: 'Chat', icon: '💬', defaultActive: true,
+  render: async function(container) {
+    if (!container.dataset.ready) {
+      container.innerHTML = `
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-msg ai">Hello! I'm your Horizon assistant. How are you feeling today?</div>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" placeholder="Type a message...">
+          <button id="chat-send-btn">Send</button>
+        </div>`;
+      container.dataset.ready = '1';
+      setTimeout(() => {
+        const input = document.getElementById('chat-input');
+        const btn = document.getElementById('chat-send-btn');
+        const msgs = document.getElementById('chat-messages');
+        function sendMsg() {
+          const text = input.value.trim();
+          if (!text) return;
+          const userDiv = document.createElement('div'); userDiv.className = 'chat-msg user'; userDiv.textContent = 'You: ' + text;
+          msgs.appendChild(userDiv);
+          input.value = '';
+          // Placeholder AI response
+          setTimeout(() => {
+            const aiDiv = document.createElement('div'); aiDiv.className = 'chat-msg ai';
+            aiDiv.textContent = 'AI: I hear you. This feature will connect to the AI soon!';
+            msgs.appendChild(aiDiv);
+            msgs.scrollTop = msgs.scrollHeight;
+          }, 500);
+          msgs.scrollTop = msgs.scrollHeight;
+        }
+        if (btn) btn.addEventListener('click', sendMsg);
+        if (input) input.addEventListener('keydown', function(e) { if (e.key === 'Enter') sendMsg(); });
+      }, 100);
+    }
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════ */
 function showToast(msg, undoCallback) {
   var c = document.getElementById('toast-container'); if(!c) return;
   var t = document.createElement('div'); t.className='toast';
   t.innerHTML = '<span>' + escapeHtml(msg) + '</span>';
-  if (undoCallback) {
-    var btn = document.createElement('button');
-    btn.className = 'toast-btn';
-    btn.textContent = 'Undo';
-    btn.onclick = function() { undoCallback(); t.remove(); };
-    t.appendChild(btn);
-  }
+  if (undoCallback) { var btn = document.createElement('button'); btn.className = 'toast-btn'; btn.textContent = 'Undo'; btn.onclick = function() { undoCallback(); t.remove(); }; t.appendChild(btn); }
   c.appendChild(t);
   setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity 0.3s'; setTimeout(function(){t.remove();},300); }, 4000);
 }
 
-// TODAY LIST VIEW
-function toggleListView() {
-  var board = document.getElementById('kanban-board');
-  var list = document.getElementById('today-list-view');
-  board.classList.toggle('visible');
-  list.classList.toggle('visible');
-  if (list.classList.contains('visible')) refreshListView();
-}
-async function refreshListView() {
+/* ═══════════════════════════════════════════════════════════
+   SUNRISE SEQUENCE
+   ═══════════════════════════════════════════════════════════ */
+const SUNRISE_DURATION = 60000;
+const SUNRISE_GOLD = { r: 255, g: 215, b: 0 };
+
+function startSunriseSequence() {
+  if (sunriseActive) return;
+  sunriseActive = true;
+  const btn = document.getElementById('sunrise-btn');
+  if (btn) { btn.disabled = true; }
+  document.body.classList.add('sunrise-active');
+
+  let remainingSeconds = Math.ceil(SUNRISE_DURATION / 1000);
+  if (btn) btn.textContent = '☀️ ' + remainingSeconds + 's';
+  const countdownId = setInterval(() => {
+    remainingSeconds--;
+    if (remainingSeconds > 0 && btn) { btn.textContent = '☀️ ' + remainingSeconds + 's'; }
+  }, 1000);
+
+  function cleanupSunrise() {
+    clearInterval(countdownId);
+    sunriseActive = false;
+    if (btn) { btn.disabled = false; btn.textContent = '☀️ Start Sunrise'; }
+    document.body.classList.remove('sunrise-active');
+    fetchTimeColor();
+  }
+
+  const startBg = { ...bgColor };
+  startColorLerp(startBg, SUNRISE_GOLD, SUNRISE_DURATION);
+
   try {
-    var r = await fetch('/api/today');
-    if (!r.ok) return;
-    var data = await r.json();
-    var ol = document.getElementById('today-list-items');
-    ol.innerHTML = '';
-    if (data.tasks && data.tasks.length > 0) {
-      data.tasks.forEach(function(t) {
-        var li = document.createElement('li');
-        li.className = t.status === 'done' ? 'done' : '';
-        li.innerHTML = '<span class="list-checkbox" onclick="event.stopPropagation();toggleListItem(' + t.id + ',this)">' + (t.status === 'done' ? '&#x2611;' : '&#x2610;') + '</span>' + escapeHtml(t.title) + '<div class="list-meta">' + (t.goal_title ? escapeHtml(t.goal_title) + ' &middot; ' : '') + t.status + '</div>';
-        li.onclick = function() { toggleListItem(t.id, this.querySelector('.list-checkbox')); };
-        ol.appendChild(li);
-      });
-    } else {
-      ol.innerHTML = '<li style="opacity:0.4;list-style:none">No tasks for today. Create a goal!</li>';
-    }
-  } catch(e) {}
-}
-async function toggleListItem(taskId, checkboxEl) {
-  try {
-    var isDone = checkboxEl.innerHTML.indexOf('2611') >= 0;
-    var newStatus = isDone ? 'pending' : 'done';
-    await fetch('/api/tasks/' + taskId, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})});
-    refreshListView();
-    refreshBoard();
-  } catch(e) {}
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+    oscillator.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + SUNRISE_DURATION / 1000);
+    const fadeInEnd = audioCtx.currentTime + 2;
+    const fadeOutStart = audioCtx.currentTime + (SUNRISE_DURATION / 1000) - 5;
+    const endTime = audioCtx.currentTime + SUNRISE_DURATION / 1000;
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.15, fadeInEnd);
+    gainNode.gain.setValueAtTime(0.15, fadeOutStart);
+    gainNode.gain.linearRampToValueAtTime(0, endTime);
+    oscillator.connect(gainNode); gainNode.connect(audioCtx.destination);
+    oscillator.start(audioCtx.currentTime); oscillator.stop(endTime);
+    setTimeout(() => { cleanupSunrise(); audioCtx.close().catch(() => {}); }, SUNRISE_DURATION + 200);
+  } catch (err) {
+    console.warn('Web Audio not available:', err);
+    setTimeout(cleanupSunrise, SUNRISE_DURATION + 200);
+  }
 }
 
-// Add list view icon to the top bar
-document.addEventListener('DOMContentLoaded', function() {
-  var h1 = document.querySelector('#top-bar h1');
-  if (h1) {
-    var viewToggle = document.createElement('span');
-    viewToggle.style.cssText = 'cursor:pointer;margin-left:8px;opacity:0.5;font-size:0.9rem;';
-    viewToggle.innerHTML = '&#x1f4cb;';
-    viewToggle.title = 'Toggle list view';
-    viewToggle.onclick = toggleListView;
-    h1.appendChild(viewToggle);
-  }
-});
+/* ═══════════════════════════════════════════════════════════
+   AUTO-SUNRISE SCHEDULER
+   ═══════════════════════════════════════════════════════════ */
+let autoSunrisePollId = null;
+let autoSunriseLocalEnabled = false;
+let autoSunriseLocalTime = '07:00';
 
-document.addEventListener('DOMContentLoaded', function() {
-  var addTaskBtn = document.getElementById('add-task-btn');
-  if (addTaskBtn) {
-    addTaskBtn.addEventListener('click', function() {
-      document.getElementById('quick-task-input').parentElement.classList.toggle('open');
-      document.getElementById('quick-task-input').focus();
+async function loadScheduleFromServer(toggleEl, timeEl) {
+  try {
+    const res = await fetch('/api/sunrise/schedule'); if (!res.ok) return;
+    const data = await res.json();
+    if (toggleEl) toggleEl.checked = data.enabled;
+    if (timeEl) timeEl.value = data.time;
+    autoSunriseLocalEnabled = data.enabled; autoSunriseLocalTime = data.time;
+    saveAutoSunriseLocal();
+  } catch (err) { loadAutoSunriseLocal(toggleEl, timeEl); }
+}
+function loadAutoSunriseLocal(toggleEl, timeEl) {
+  try {
+    const saved = localStorage.getItem('horizon_auto_sunrise');
+    if (saved) { const p = JSON.parse(saved); if (typeof p.enabled === 'boolean') { autoSunriseLocalEnabled = p.enabled; if (toggleEl) toggleEl.checked = p.enabled; } if (typeof p.time === 'string') { autoSunriseLocalTime = p.time; if (timeEl) timeEl.value = p.time; } }
+  } catch(e) {}
+}
+function saveAutoSunriseLocal() { try { localStorage.setItem('horizon_auto_sunrise', JSON.stringify({enabled:autoSunriseLocalEnabled, time:autoSunriseLocalTime})); } catch(e) {} }
+async function saveScheduleToServer(enabled, time) { try { await fetch('/api/sunrise/schedule', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled,time})}); } catch(e) {} }
+
+async function checkSunriseTrigger() {
+  try { const res = await fetch('/api/sunrise/schedule'); if(res.ok){ const data = await res.json(); if(data.sunrise_triggered) startSunriseSequence(); } } catch(e) { checkLocalSunriseTime(); }
+}
+function checkLocalSunriseTime() {
+  if (!autoSunriseLocalEnabled) return;
+  const now = new Date(); const cm = now.getHours()*60+now.getMinutes();
+  const [h,m] = autoSunriseLocalTime.split(':').map(Number); const tm = h*60+m;
+  if (cm === tm) { const tk = now.toDateString(); const lt = localStorage.getItem('horizon_last_sunrise_date'); if(lt!==tk){ try{localStorage.setItem('horizon_last_sunrise_date',tk);}catch(e){} startSunriseSequence(); } }
+}
+function startAutoSunrisePolling() {
+  loadScheduleFromServer(); autoSunrisePollId = setInterval(checkSunriseTrigger, 15000); setInterval(checkLocalSunriseTime, 30000);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIVITY TRACKING
+   ═══════════════════════════════════════════════════════════ */
+const hasJsApi = typeof pywebview !== 'undefined' && pywebview.api;
+let activityPollId = null, activitySSE = null;
+window._lastActivity = null;
+
+async function fetchActivityNow() {
+  try {
+    const res = await fetch('/api/activity/now'); if (!res.ok) return;
+    const data = await res.json();
+    window._lastActivity = data;
+    if (window._questUpdateActivity) window._questUpdateActivity();
+    document.getElementById('activity-indicator-inline');
+  } catch(e) {}
+}
+function startActivityPolling() { if(activityPollId) clearInterval(activityPollId); activityPollId = setInterval(fetchActivityNow, 30000); fetchActivityNow(); }
+function startActivityTracking() {
+  if (hasJsApi) { console.log('PyWebView bridge detected'); startActivityPolling(); return; }
+  try {
+    activitySSE = new EventSource('/api/activity/stream');
+    activitySSE.addEventListener('activity', (e) => {
+      try { const data = JSON.parse(e.data); window._lastActivity = data; if (window._questUpdateActivity) window._questUpdateActivity(); } catch(err) {}
     });
-  }
-  var inp = document.getElementById('quick-task-input');
-  if (inp) {
-    inp.addEventListener('keydown', async function(e) {
-      if (e.key==='Enter' && this.value.trim()) {
-        try {
-          await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:this.value.trim(),type:'long_term'})});
-          this.value=''; this.parentElement.classList.remove('open'); showToast('Created!'); refreshBoard();
-        } catch(e) { showToast('Failed'); }
-      }
-    });
-  }
-  var addGoalBtn = document.getElementById('add-goal-btn');
-  if (addGoalBtn) {
-    addGoalBtn.addEventListener('click', function() {
-      document.getElementById('quick-goal-input').parentElement.classList.toggle('open');
-      document.getElementById('quick-goal-input').focus();
-    });
-  }
-  var inp2 = document.getElementById('quick-goal-input');
-  if (inp2) {
-    inp2.addEventListener('keydown', async function(e) {
-      if (e.key==='Enter' && this.value.trim()) {
-        try {
-          await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:this.value.trim()})});
-          this.value=''; this.parentElement.classList.remove('open'); showToast('Goal created!'); refreshBoard();
-        } catch(e) { showToast('Failed'); }
-      }
-    });
-  }
-  var tameBtn = document.getElementById('tame-btn2');
-  if (tameBtn) {
-    tameBtn.addEventListener('click', async function() {
-      var ta = document.getElementById('chaos-textarea2');
-      if (!ta.value.trim()) return;
-      try {
-        var r = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:ta.value.trim()})});
-        if(r.ok){ta.value='';showToast('Classified!');refreshBoard();}
-      } catch(e){showToast('Failed');}
-    });
-  }
-  refreshBoard();
-  setInterval(refreshBoard, 30000);
-});
+    activitySSE.addEventListener('error', () => { if(activitySSE){activitySSE.close();activitySSE=null;} startActivityPolling(); });
+  } catch(err) { startActivityPolling(); }
+  setInterval(() => { PanelSystem.refreshPanel('stats'); }, 30000);
+
+  // Feed SSE — live updates when n8n sends data
+  try {
+    const feedSSE = new EventSource('/api/feed/stream');
+    feedSSE.addEventListener('feed_item', () => { PanelSystem.refreshPanel('feed'); });
+    feedSSE.addEventListener('feed_fetch_started', () => { PanelSystem.refreshPanel('feed'); });
+  } catch(err) {}
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async () => {
   resizeCanvas();
   initStars(currentStarCount);
-
-  // 1. Load Main Quest
-  loadQuest();
-
-  // 2. Fetch time color → start interpolation
   await fetchTimeColor();
-
-  // 3. Start canvas animation loop
   requestAnimationFrame(animate);
-
-  // 4. Fetch today's focus
-  await fetchToday();
-
-  // 5. Start auto-sunrise scheduler polling
   startAutoSunrisePolling();
-
-  // 6. Start activity tracking (SSE or polling)
   startActivityTracking();
+
+  // Initialize panel system
+  await PanelSystem.init();
 });
 </script>
-
 </body>
 </html>

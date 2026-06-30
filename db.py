@@ -4,6 +4,8 @@ Schema version history:
   version 1 — v0.1 MVP: chaos table (now/later/trash classification)
   version 2 — v0.2: activity_log, time_blocks, app_categories tables
   version 3 — v0.3: goals, tasks, task_log tables for dynamic kanban goals system
+  version 4 — widened task_log action CHECK
+  version 5 — feed_items, feed_runs tables for n8n feed aggregation
 """
 
 import os
@@ -101,8 +103,49 @@ CREATE TABLE IF NOT EXISTS task_log (
     ai_analysis TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-"""
 
+-- Sunrise schedule persistence (enabled, time, last_triggered_date)
+CREATE TABLE IF NOT EXISTS sunrise_config (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0,
+    time TEXT NOT NULL DEFAULT '07:00',
+    last_triggered_date TEXT
+);
+
+-- Feed items — n8n summarization results
+CREATE TABLE IF NOT EXISTS feed_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    original_id TEXT NOT NULL UNIQUE,
+    relevance_score REAL DEFAULT 0.0,
+    is_relevant INTEGER DEFAULT 0,
+    priority_level INTEGER DEFAULT 50,
+    category TEXT DEFAULT '',
+    one_liner TEXT NOT NULL,
+    sentiment_tone TEXT DEFAULT 'neutral',
+    source_url TEXT DEFAULT '',
+    source_name TEXT DEFAULT '',
+    dismissed INTEGER DEFAULT 0,
+    feed_run_id INTEGER REFERENCES feed_runs(id),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_feed_items_dismissed ON feed_items(dismissed);
+CREATE INDEX IF NOT EXISTS idx_feed_items_created ON feed_items(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feed_items_original_id ON feed_items(original_id);
+
+-- Feed runs — records of each n8n fetch
+CREATE TABLE IF NOT EXISTS feed_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    triggered_by TEXT DEFAULT 'schedule',
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    total_items INTEGER DEFAULT 0,
+    total_relevant INTEGER DEFAULT 0,
+    average_relevance REAL DEFAULT 0.0,
+    status TEXT DEFAULT 'pending'
+);
+
+"""
 
 async def get_db() -> aiosqlite.Connection:
     """Return an async SQLite connection."""
@@ -131,9 +174,11 @@ async def init_db():
         current_ver = await _get_schema_version(db)
 
         if current_ver == 0:
-            # Fresh database — SCHEMA_SQL already creates v4 tables
-            await _set_schema_version(db, 4)
+            # Fresh database — SCHEMA_SQL already creates v5 tables
+            await _set_schema_version(db, 5)
             await db.commit()
+            import logging
+            logging.getLogger(__name__).info("Fresh database initialized (schema v5)")
             return
 
         if current_ver == 2:
@@ -164,7 +209,14 @@ async def init_db():
             await db.commit()
             import logging
             logging.getLogger(__name__).info("Schema migrated to v4 (task_log CHECK widened)")
-            return
+            # Fall through to v4→v5
+
+        if current_ver <= 4:
+            # Migration v4 → v5: feed tables already exist via SCHEMA_SQL, just bump version
+            await _set_schema_version(db, 5)
+            await db.commit()
+            import logging
+            logging.getLogger(__name__).info("Schema migrated to v5 (feed tables added)")
 
         await db.commit()
     finally:
@@ -712,5 +764,265 @@ async def get_task_log_for_date(date_str: str) -> list[dict]:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+# ── Sunrise config persistence ────────────────────────────────────────────
+
+
+async def get_sunrise_config() -> dict:
+    """Load the sunrise schedule from DB. Returns defaults if no row exists."""
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT enabled, time, last_triggered_date FROM sunrise_config WHERE id = 1")
+        row = await cursor.fetchone()
+        if row:
+            return {
+                "enabled": bool(row["enabled"]),
+                "time": row["time"],
+                "last_triggered_date": row["last_triggered_date"],
+            }
+        return {"enabled": False, "time": "07:00", "last_triggered_date": None}
+    finally:
+        await db.close()
+
+
+async def save_sunrise_config(enabled: bool, time: str, last_triggered_date: str | None = None) -> None:
+    """Upsert the sunrise schedule into DB."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "INSERT INTO sunrise_config (id, enabled, time, last_triggered_date) VALUES (1, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET enabled=excluded.enabled, time=excluded.time, last_triggered_date=excluded.last_triggered_date",
+            (1 if enabled else 0, time, last_triggered_date),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+# ── Feed Items ────────────────────────────────────────────────────────────
+
+
+async def insert_feed_item(
+    original_id: str,
+    one_liner: str,
+    relevance_score: float = 0.0,
+    is_relevant: bool = False,
+    priority_level: int = 50,
+    category: str = "",
+    sentiment_tone: str = "neutral",
+    source_url: str = "",
+    source_name: str = "",
+    feed_run_id: int | None = None,
+) -> int | None:
+    """Insert a feed item. Returns the new id, or None if original_id already exists."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            """INSERT OR IGNORE INTO feed_items
+               (original_id, one_liner, relevance_score, is_relevant,
+                priority_level, category, sentiment_tone, source_url,
+                source_name, feed_run_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (original_id, one_liner, relevance_score, 1 if is_relevant else 0,
+             priority_level, category, sentiment_tone, source_url,
+             source_name, feed_run_id),
+        )
+        await db.commit()
+        return cursor.lastrowid if cursor.lastrowid else None
+    finally:
+        await db.close()
+
+
+async def get_feed_items(
+    dismissed: bool | None = False,
+    category: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """Return feed items, newest first.
+
+    Args:
+        dismissed: False=active only, True=dismissed only, None=all.
+        category: optional category filter.
+    """
+    db = await get_db()
+    try:
+        conditions: list[str] = []
+        params: list = []
+
+        if dismissed is not None:
+            conditions.append("dismissed = ?")
+            params.append(1 if dismissed else 0)
+        if category:
+            conditions.append("category = ?")
+            params.append(category)
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        cursor = await db.execute(
+            f"SELECT * FROM feed_items {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            params + [limit, offset],
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_feed_item(item_id: int) -> dict | None:
+    """Return a single feed item by id."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM feed_items WHERE id = ?", (item_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def dismiss_feed_item(item_id: int, dismissed: bool = True) -> bool:
+    """Mark a feed item as dismissed (or undismissed). Returns True if changed."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "UPDATE feed_items SET dismissed = ? WHERE id = ?",
+            (1 if dismissed else 0, item_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+    finally:
+        await db.close()
+
+
+async def get_dismissed_count() -> int:
+    """Return the number of dismissed feed items."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) AS cnt FROM feed_items WHERE dismissed = 1"
+        )
+        row = await cursor.fetchone()
+        return row["cnt"] if row else 0
+    finally:
+        await db.close()
+
+
+async def has_feed_item(original_id: str) -> bool:
+    """Check if a feed item with this original_id already exists."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT 1 FROM feed_items WHERE original_id = ?", (original_id,)
+        )
+        row = await cursor.fetchone()
+        return row is not None
+    finally:
+        await db.close()
+
+
+# ── Feed Runs ─────────────────────────────────────────────────────────────
+
+
+async def insert_feed_run(triggered_by: str = "schedule") -> int:
+    """Create a new feed run record. Returns the run id."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "INSERT INTO feed_runs (triggered_by) VALUES (?)",
+            (triggered_by,),
+        )
+        await db.commit()
+        return cursor.lastrowid
+    finally:
+        await db.close()
+
+
+async def update_feed_run(
+    run_id: int,
+    *,
+    completed_at: str | None = None,
+    total_items: int | None = None,
+    total_relevant: int | None = None,
+    average_relevance: float | None = None,
+    status: str | None = None,
+) -> None:
+    """Update fields on a feed run record."""
+    updates: dict[str, object] = {}
+    if completed_at is not None:
+        updates["completed_at"] = completed_at
+    if total_items is not None:
+        updates["total_items"] = total_items
+    if total_relevant is not None:
+        updates["total_relevant"] = total_relevant
+    if average_relevance is not None:
+        updates["average_relevance"] = average_relevance
+    if status is not None:
+        updates["status"] = status
+    if not updates:
+        return
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [run_id]
+
+    db = await get_db()
+    try:
+        await db.execute(
+            f"UPDATE feed_runs SET {set_clause} WHERE id = ?", values
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def get_last_feed_run() -> dict | None:
+    """Return the most recent feed run, or None."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT * FROM feed_runs ORDER BY id DESC LIMIT 1"
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        await db.close()
+
+
+async def get_feed_stats() -> dict:
+    """Return aggregate feed statistics."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) AS cnt FROM feed_items WHERE dismissed = 0"
+        )
+        active_count = (await cursor.fetchone())["cnt"]
+
+        cursor = await db.execute(
+            "SELECT COUNT(*) AS cnt FROM feed_items WHERE dismissed = 1"
+        )
+        dismissed_count = (await cursor.fetchone())["cnt"]
+
+        cursor = await db.execute(
+            "SELECT COALESCE(AVG(relevance_score), 0.0) AS avg_rel FROM feed_items WHERE dismissed = 0"
+        )
+        avg_relevance = (await cursor.fetchone())["avg_rel"]
+
+        cursor = await db.execute(
+            "SELECT category, COUNT(*) AS cnt FROM feed_items WHERE dismissed = 0 GROUP BY category ORDER BY cnt DESC"
+        )
+        categories = {row["category"]: row["cnt"] for row in await cursor.fetchall()}
+
+        last_run = await get_last_feed_run()
+
+        return {
+            "active_items": active_count,
+            "dismissed_items": dismissed_count,
+            "average_relevance": round(avg_relevance, 2),
+            "categories": categories,
+            "last_run": last_run,
+        }
     finally:
         await db.close()

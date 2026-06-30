@@ -37,9 +37,6 @@ def main() -> None:
     here = Path(__file__).resolve().parent
     dist_dir = here / "dist"
 
-    # Determine which spec file to use
-    spec_name = "horizon_chamber_debug.spec" if args.debug else "horizon_chamber.spec"
-
     # Clean previous build artifacts
     for d in [here / "build", dist_dir]:
         if d.exists():
@@ -75,9 +72,9 @@ def main() -> None:
     if icon_path.exists():
         cmd.extend(["--icon", str(icon_path)])
 
-    # Add data files: static folder, .env template, db schema
+    # Add data files: static folder, .env.example template, requirements.txt
     cmd.extend(["--add-data", f"{here / 'static'}{';'}static"])
-    cmd.extend(["--add-data", f"{here / '.env'}{';'}."])
+    cmd.extend(["--add-data", f"{here / '.env.example'}{';'}."])
     cmd.extend(["--add-data", f"{here / 'requirements.txt'}{';'}."])
 
     # Hidden imports (PyInstaller auto-detect may miss some)
@@ -88,6 +85,8 @@ def main() -> None:
     cmd.extend(["--hidden-import", "monitor"])
     cmd.extend(["--hidden-import", "scheduler"])
     cmd.extend(["--hidden-import", "deepseek_client"])
+    cmd.extend(["--hidden-import", "feed"])
+    cmd.extend(["--hidden-import", "goal_engine"])
     cmd.extend(["--hidden-import", "uvicorn.logging"])
     cmd.extend(["--hidden-import", "uvicorn.loops.auto"])
     cmd.extend(["--hidden-import", "uvicorn.protocols.http.auto"])

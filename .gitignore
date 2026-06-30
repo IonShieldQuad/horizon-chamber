@@ -1,5 +1,6 @@
 # Environments
 .env
+.env.local
 
 # Database
 *.db
@@ -22,3 +23,12 @@ Thumbs.db
 build/
 dist/
 *.spec
+# But track the clean main spec file
+!HorizonChamber.spec
+
+# Kun agent internal state (design docs, plans, traces)
+.kunsdd/
+
+# Temp / scratch files
+*.tmp
+_*.py

@@ -10,8 +10,6 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 
 @pytest.mark.asyncio
 async def test_insert_all_categories(tmp_path):

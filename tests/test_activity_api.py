@@ -7,8 +7,6 @@ import tempfile
 import pytest
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 os.environ.setdefault("DEEPSEEK_API_KEY", "test-key-123")
 os.environ["DATABASE_PATH"] = os.path.join(tempfile.gettempdir(), "horizon_test_activity_api.db")
 

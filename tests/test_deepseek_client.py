@@ -6,8 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 os.environ.setdefault("DEEPSEEK_API_KEY", "test-key-123")
 # Re-import after setting env var
 import importlib

@@ -6,8 +6,6 @@ from datetime import datetime
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 import scheduler
 
 # Reset scheduler state before each test (shared in-memory module)

@@ -13,13 +13,14 @@ from dotenv import load_dotenv
 # in db.py and deepseek_client.py pick up the correct values.
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import db
 import deepseek_client
+import feed as feed_module
 import goal_engine
 import monitor
 import scheduler
@@ -46,7 +47,8 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("DeepSeek API key is configured")
 
-    # Start the sunrise scheduler background checker
+    # Load persisted sunrise schedule and start the background checker
+    await scheduler.load_from_db()
     scheduler_task = asyncio.create_task(scheduler._check_schedule_loop())
     logger.info("Sunrise scheduler background task started")
 
@@ -63,6 +65,10 @@ async def lifespan(app: FastAPI):
     # Start the goal engine background loop
     engine_task = asyncio.create_task(goal_engine.start_engine())
     logger.info("Goal engine background task started")
+
+    # Start the feed scheduler background loop
+    feed_task = asyncio.create_task(feed_module._scheduler_loop())
+    logger.info("Feed scheduler background task started")
 
     yield
 
@@ -83,6 +89,13 @@ async def lifespan(app: FastAPI):
     scheduler_task.cancel()
     try:
         await scheduler_task
+    except asyncio.CancelledError:
+        pass
+
+    # Cancel feed scheduler
+    feed_task.cancel()
+    try:
+        await feed_task
     except asyncio.CancelledError:
         pass
 
@@ -168,6 +181,27 @@ class UpdateTaskRequest(BaseModel):
 class CreateTaskRequest(BaseModel):
     goal_id: int = Field(..., description="Parent goal id")
     title: str = Field(..., min_length=1, description="Task title")
+
+
+# ── Feed Schemas ─────────────────────────────────────────────────────────
+
+
+class FeedProcessedItem(BaseModel):
+    original_id: str = Field(..., description="Unique ID from the source")
+    relevance_score: float = Field(0.0, ge=0.0, le=10.0)
+    is_relevant: bool = False
+    priority_level: int = Field(50, ge=0, le=100)
+    category: str = ""
+    one_liner: str = Field(..., min_length=1)
+    sentiment_tone: str = "neutral"
+    source_url: str = ""
+    source_name: str = ""
+
+
+class FeedIngestPayload(BaseModel):
+    processed_items: list[FeedProcessedItem]
+    total_relevant: int = 0
+    summary_stats: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -615,3 +649,116 @@ async def activity_history(limit: int = 50):
     """Return recent activity log entries."""
     entries = await db.get_recent_activity(limit=limit)
     return {"entries": entries}
+
+
+# ---------------------------------------------------------------------------
+# Feed routes
+# ---------------------------------------------------------------------------
+
+
+def _verify_feed_api_key(authorization: str | None = None) -> bool:
+    """Check the incoming Bearer token against FEED_API_KEY.
+
+    If FEED_API_KEY is empty/unset, no auth is required (dev mode).
+    """
+    key = feed_module.FEED_API_KEY
+    if not key:
+        return True  # no key configured = allow all (dev mode)
+    if not authorization:
+        return False
+    parts = authorization.split()
+    return len(parts) == 2 and parts[0].lower() == "bearer" and parts[1] == key
+
+
+@app.post("/api/feed/ingest")
+async def feed_ingest(
+    payload: FeedIngestPayload,
+    authorization: str | None = Header(None),
+):
+    """Receive feed data from n8n (authenticated with FEED_API_KEY)."""
+    if not _verify_feed_api_key(authorization):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    try:
+        result = await feed_module.ingest_payload(payload.model_dump())
+        return result
+    except Exception as exc:
+        logger.exception("Feed ingest failed")
+        raise HTTPException(status_code=500, detail=f"Ingest failed: {exc}")
+
+
+@app.get("/api/feed/items")
+async def feed_list(
+    dismissed: bool | None = False,
+    category: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List feed items, newest first."""
+    items = await feed_module.get_feed_items(
+        dismissed=dismissed, category=category, limit=limit, offset=offset
+    )
+    return {"items": items, "count": len(items), "total_dismissed": await feed_module.get_dismissed_count()}
+
+
+@app.get("/api/feed/items/{item_id}")
+async def feed_get_item(item_id: int):
+    """Return a single feed item by id."""
+    item = await feed_module.get_feed_item(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Feed item not found")
+    return item
+
+
+@app.patch("/api/feed/items/{item_id}/dismiss")
+async def feed_dismiss(item_id: int):
+    """Dismiss a feed item."""
+    ok = await feed_module.dismiss_item(item_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Feed item not found")
+    return {"ok": True}
+
+
+@app.patch("/api/feed/items/{item_id}/undismiss")
+async def feed_undismiss(item_id: int):
+    """Restore a dismissed feed item."""
+    ok = await feed_module.undismiss_item(item_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Feed item not found")
+    return {"ok": True}
+
+
+@app.post("/api/feed/trigger")
+async def feed_trigger():
+    """Manually trigger an n8n fetch."""
+    result = await feed_module.trigger_fetch(triggered_by="manual")
+    if not result.get("ok"):
+        raise HTTPException(status_code=429 if "cooldown" in result.get("message", "") else 502, detail=result["message"])
+    return result
+
+
+@app.get("/api/feed/stats")
+async def feed_stats():
+    """Return feed statistics and last run info."""
+    stats = await feed_module.get_stats()
+    return stats
+
+
+@app.get("/api/feed/stream")
+async def feed_stream():
+    """SSE stream delivering feed events (new items, fetch status)."""
+
+    async def event_source():
+        q: asyncio.Queue = asyncio.Queue(maxsize=100)
+        feed_module.register_sse_queue(q)
+        try:
+            while True:
+                try:
+                    event_name, data = await asyncio.wait_for(q.get(), timeout=30.0)
+                    yield (event_name, data)
+                except asyncio.TimeoutError:
+                    continue
+        finally:
+            feed_module.unregister_sse_queue(q)
+
+    return sse.sse_response(event_source(), ping_interval=15.0)
