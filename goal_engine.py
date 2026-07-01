@@ -20,6 +20,7 @@ GOAL_MAX_CARRY_OVER = int(os.getenv("GOAL_MAX_CARRY_OVER", "3"))
 GOAL_CLEANUP_TIME = os.getenv("GOAL_CLEANUP_TIME", "04:00")
 GOAL_GENERATE_ON_OPEN = os.getenv("GOAL_GENERATE_ON_OPEN", "true").lower() in ("true", "1")
 NUDGES_ENABLED = os.getenv("NUDGES_ENABLED", "true").lower() in ("true", "1")
+GOAL_MAX_PENDING_TASKS = int(os.getenv("GOAL_MAX_PENDING_TASKS", "3"))
 
 # ── In-memory state ──────────────────────────────────────────────────────
 
@@ -76,9 +77,8 @@ async def _generate_for_long_term(goal: dict, today_str: str) -> dict:
         over_threshold = carry_count > GOAL_MAX_CARRY_OVER
         tid = await db.insert_task(
             goal["id"], last_task["title"], today_str,
-            ai_suggested=1,
+            ai_suggested=1, carry_over_count=carry_count,
         )
-        await db.update_task(tid, carry_over_count=carry_count)
         await db.insert_task_log(
             tid, goal["id"], "carried_over", today_str,
             ai_analysis=f'{{"carry_count": {carry_count}, "over_threshold": {str(over_threshold).lower()}}}',
@@ -208,6 +208,12 @@ async def generate_today_tasks(today_str: Optional[str] = None) -> dict:
             gen_func = _generate_for_maintenance
 
         if gen_func:
+            # Anti-spam: skip if goal already has too many incomplete tasks
+            pending_count = await db.get_incomplete_task_count(goal["id"])
+            if pending_count >= GOAL_MAX_PENDING_TASKS:
+                logger.info("Goal %d (%s) has %d pending tasks >= threshold %d — skipping",
+                            goal["id"], goal["title"], pending_count, GOAL_MAX_PENDING_TASKS)
+                continue
             try:
                 result = await gen_func(goal, today_str)
                 total_created += result["created"]
@@ -269,8 +275,8 @@ async def get_board(date_str: Optional[str] = None) -> dict:
     today_task_ids = {t["id"] for t in today_tasks}
     overdue_unique = [t for t in overdue_tasks if t["id"] not in today_task_ids]
 
-    # Assemble columns
-    today_column = [t for t in today_tasks if t["status"] in ("pending", "doing")]
+    # Assemble columns — "today" is pending only, "doing" is doing only, no overlap
+    today_column = [t for t in today_tasks if t["status"] == "pending"]
     doing_column = [t for t in today_tasks if t["status"] == "doing"]
     done_column = [t for t in today_tasks if t["status"] == "done"]
     overdue_column = overdue_unique
@@ -301,6 +307,8 @@ async def get_board(date_str: Optional[str] = None) -> dict:
         "overdue": [annotate_task(t) for t in overdue_column],
     }
 
+    # done / (done + skipped) — aligns with compute_analysis() formula
+    cr_denom = done_count + skipped_count
     stats = {
         "total_tasks": total_tasks,
         "done": done_count,
@@ -308,7 +316,7 @@ async def get_board(date_str: Optional[str] = None) -> dict:
         "doing": doing_count,
         "skipped": skipped_count,
         "active_goals": len([g for g in all_goals if not g["archived"]]),
-        "completion_rate": round(done_count / total_tasks * 100, 1) if total_tasks > 0 else 0.0,
+        "completion_rate": round(done_count / cr_denom * 100, 1) if cr_denom > 0 else 0.0,
     }
 
     return {
@@ -333,10 +341,12 @@ async def get_today_list() -> list[dict]:
 
     tasks = await db.get_tasks_for_date(today_str)
 
-    # Annotate with goal info
+    # Annotate with goal info (batch fetch goals to avoid N+1)
+    all_goals = await db.get_goals()
+    goal_map = {g["id"]: g for g in all_goals}
     result = []
     for t in tasks:
-        goal = await db.get_goal(t["goal_id"])
+        goal = goal_map.get(t["goal_id"])
         result.append({
             "id": t["id"],
             "goal_id": t["goal_id"],

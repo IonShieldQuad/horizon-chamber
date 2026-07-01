@@ -4,6 +4,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
+import asyncio
 
 import pytest
 

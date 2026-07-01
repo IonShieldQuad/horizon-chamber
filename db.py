@@ -487,6 +487,33 @@ async def insert_goal(
         await db.close()
 
 
+INBOX_GOAL_ID: int | None = None
+
+
+async def get_or_create_inbox_goal() -> int:
+    """Return the id of the shared 'Inbox' goal, creating it if needed."""
+    global INBOX_GOAL_ID
+    if INBOX_GOAL_ID is not None:
+        return INBOX_GOAL_ID
+
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT id FROM goals WHERE title = '📥 Inbox' AND archived = 0 LIMIT 1",
+        )
+        row = await cursor.fetchone()
+        if row:
+            INBOX_GOAL_ID = row["id"]
+            return INBOX_GOAL_ID
+    finally:
+        await db.close()
+
+    # Not found — create it
+    gid = await insert_goal("long_term", "📥 Inbox", description="Auto-captured tasks")
+    INBOX_GOAL_ID = gid
+    return gid
+
+
 async def get_goal(goal_id: int) -> Optional[dict]:
     """Return a single goal by id, or None if not found."""
     db = await get_db()
@@ -579,15 +606,17 @@ async def insert_task(
     description: str = "",
     ai_suggested: int = 0,
     parent_task_id: Optional[int] = None,
+    carry_over_count: int = 0,
 ) -> int:
     """Create a new task. Returns the new task id."""
     db = await get_db()
     try:
         cursor = await db.execute(
             """INSERT INTO tasks (goal_id, title, description, date,
-               ai_suggested, parent_task_id)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (goal_id, title, description, date_str, ai_suggested, parent_task_id),
+               ai_suggested, parent_task_id, carry_over_count)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (goal_id, title, description, date_str, ai_suggested, parent_task_id,
+             carry_over_count),
         )
         await db.commit()
         return cursor.lastrowid
@@ -688,11 +717,11 @@ async def get_overdue_tasks(date_str: str) -> list[dict]:
 
 
 async def get_latest_task_for_goal(goal_id: int) -> Optional[dict]:
-    """Return the most recently created task for a goal, or None."""
+    """Return the most recent task for a goal by date (fallback to creation time), or None."""
     db = await get_db()
     try:
         cursor = await db.execute(
-            "SELECT * FROM tasks WHERE goal_id = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM tasks WHERE goal_id = ? ORDER BY date DESC, created_at DESC LIMIT 1",
             (goal_id,),
         )
         row = await cursor.fetchone()
@@ -712,6 +741,21 @@ async def get_incomplete_tasks_before_date(goal_id: int, date_str: str) -> list[
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+    finally:
+        await db.close()
+
+
+async def get_incomplete_task_count(goal_id: int) -> int:
+    """Return the number of pending or doing tasks for a goal."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) AS cnt FROM tasks WHERE goal_id = ? "
+            "AND status IN ('pending', 'doing')",
+            (goal_id,),
+        )
+        row = await cursor.fetchone()
+        return row["cnt"] if row else 0
     finally:
         await db.close()
 

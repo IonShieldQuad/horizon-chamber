@@ -179,7 +179,7 @@ class UpdateTaskRequest(BaseModel):
 
 
 class CreateTaskRequest(BaseModel):
-    goal_id: int = Field(..., description="Parent goal id")
+    goal_id: int | None = Field(None, description="Parent goal id (auto-assigned to Inbox if omitted)")
     title: str = Field(..., min_length=1, description="Task title")
 
 
@@ -408,12 +408,16 @@ async def today_list():
 async def create_task(req: CreateTaskRequest):
     """Create a new task for today."""
     from datetime import date as dt_date
-    # Verify goal exists
-    goal = await db.get_goal(req.goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    # Resolve goal_id — auto-assign to Inbox if omitted
+    goal_id = req.goal_id
+    if goal_id is None:
+        goal_id = await db.get_or_create_inbox_goal()
+    else:
+        goal = await db.get_goal(goal_id)
+        if goal is None:
+            raise HTTPException(status_code=404, detail="Goal not found")
     tid = await db.insert_task(
-        goal_id=req.goal_id,
+        goal_id=goal_id,
         title=req.title,
         date_str=dt_date.today().isoformat(),
     )

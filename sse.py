@@ -34,6 +34,10 @@ async def _sse_generator(
     """Internal generator that yields SSE-formatted messages from an
     async iterator of (event, data) tuples, with keep-alive pings.
 
+    Uses short polling intervals so that the generator can be cancelled
+    promptly on Windows (where anyio task-group cancellation does not
+    propagate reliably through long asyncio.wait_for calls).
+
     Args:
         source: Async iterator yielding (event_name, payload) tuples.
         ping_interval: Seconds between keep-alive comment lines.
@@ -42,21 +46,29 @@ async def _sse_generator(
         SSE-formatted strings.
     """
     it = source.__aiter__()
-    done = False
+    poll_interval = min(ping_interval, 0.5)
+    elapsed = 0.0
 
-    while not done:
-        try:
-            event_name, data = await asyncio.wait_for(
-                it.__anext__(), timeout=ping_interval
-            )
-            yield sse_event(event_name, data)
-        except StopAsyncIteration:
-            done = True
-            break
-        except asyncio.TimeoutError:
-            # Keep-alive ping
-            yield ": ping\n\n"
-            continue
+    try:
+        while True:
+            try:
+                event_name, data = await asyncio.wait_for(
+                    it.__anext__(), timeout=poll_interval
+                )
+                elapsed = 0.0
+                yield sse_event(event_name, data)
+            except StopAsyncIteration:
+                return
+            except asyncio.TimeoutError:
+                elapsed += poll_interval
+                if elapsed >= ping_interval:
+                    yield ": ping\n\n"
+                    elapsed = 0.0
+                continue
+    finally:
+        # Always clean up the source iterator, regardless of how we exit
+        # (client disconnect, cancellation, error, or normal completion)
+        await it.aclose()
 
 
 def sse_response(

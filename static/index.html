@@ -294,6 +294,7 @@ html, body {
   flex: 1;
   min-width: 130px;
   max-width: 240px;
+  min-height: 0;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.07);
   border-radius: var(--radius-md);
@@ -1705,7 +1706,7 @@ PanelSystem.register('kanban', {
         const qti = document.getElementById('quick-task-input');
         if (qti) qti.addEventListener('keydown', async function(e) {
           if (e.key==='Enter' && this.value.trim()) {
-            try { await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:this.value.trim(),type:'long_term'})}); this.value=''; this.parentElement.classList.remove('open'); showToast('Created!'); renderKanbanContent(); } catch(e) { showToast('Failed'); }
+            try { await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:this.value.trim()})}); this.value=''; this.parentElement.classList.remove('open'); showToast('Created!'); renderKanbanContent(); } catch(e) { showToast('Failed'); }
           }
         });
 
@@ -1726,7 +1727,7 @@ async function renderKanbanContent() {
     const cards = board.columns[k] || [];
     col.innerHTML = cards.map(function(t) {
       const color = localStorage.getItem('card_color_'+t.id) || '';
-      const cls = 'goal-card' + (t.status==='done'?' done':'') + (t.goal_type?' type-'+t.goal_type:'') + (color?' color-'+color:'');
+      const cls = 'goal-card' + (t.status==='done'?' done':'') + (k==='overdue'?' overdue':'') + (t.goal_type?' type-'+t.goal_type:'') + (color?' color-'+color:'');
       const meta = t.goal_title ? '<div class="card-meta">'+escapeHtml(t.goal_title)+'</div>' : '';
       const actions = '<span class="card-actions">' +
         '<button class="btn-split" title="Color" onclick="event.stopPropagation();cycleCardColor(event,'+t.id+')">🎨</button>' +
@@ -1764,8 +1765,8 @@ function dragTask(e, taskId, status) { dragData = { id: taskId, from: status }; 
 async function dragNewCard(e) {
   e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'new');
   try {
-    var gr = await fetch('/api/goals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'New card',type:'long_term'})});
-    if(gr.ok){ var goal = await gr.json(); var tr = await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal_id:goal.id,title:'New card'})}); if(tr.ok){ var task = await tr.json(); dragData = { id: task.id, from: 'inbox', newCard: true }; } }
+    var tr = await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'New card'})});
+    if(tr.ok){ var task = await tr.json(); dragData = { id: task.id, from: 'inbox', newCard: true }; }
   } catch(e) {}
 }
 function onInboxDragEnd(e) {
