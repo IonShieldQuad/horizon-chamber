@@ -277,10 +277,11 @@ def test_trigger_endpoint(client, monkeypatch):
 def test_trigger_cooldown(client):
     """POST /api/feed/trigger respects cooldown."""
     import asyncio
+    from datetime import datetime, timedelta
     # Create a mock that succeeds
     from unittest.mock import AsyncMock
     # Set last manual fetch to recent past
-    feed_module._last_manual_fetch = datetime.now() - __import__("datetime").timedelta(minutes=5)
+    feed_module._last_manual_fetch = datetime.now() - timedelta(minutes=5)
 
     # Make trigger_fetch respect the cooldown check
     result = feed_module.can_manual_fetch()
