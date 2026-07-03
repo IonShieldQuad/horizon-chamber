@@ -778,27 +778,46 @@ html, body {
   letter-spacing: 0.05em;
 }
 .feed-card-relevance {
-  font-size: 0.6rem;
-  opacity: 0.5;
+  font-size: 0.62rem;
+  opacity: 0.7;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 .feed-card-relevance-bar {
-  width: 40px;
-  height: 3px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 2px;
+  width: 36px;
+  height: 5px;
+  background: rgba(255,255,255,0.14);
+  border-radius: 3px;
   overflow: hidden;
+  display: inline-block;
+  vertical-align: middle;
 }
 .feed-card-relevance-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: 3px;
   transition: width 0.5s;
+  display: block;
 }
 .feed-card-relevance-fill.high { background: var(--accent-green); }
 .feed-card-relevance-fill.medium { background: var(--accent-gold); }
 .feed-card-relevance-fill.low { background: var(--accent-orange); }
+
+.feed-card-source {
+  font-size: 0.67rem;
+  font-weight: 500;
+  opacity: 0.6;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.feed-card-source a {
+  color: inherit;
+  text-decoration: none;
+}
+.feed-card-source a:hover { color: var(--accent-blue); opacity: 1; }
+
 .feed-card-actions {
   display: flex;
   gap: 2px;
@@ -1384,8 +1403,8 @@ function getFeedIcon(item) {
 }
 
 function getRelevanceClass(score) {
-  if (score >= 7) return 'high';
-  if (score >= 4) return 'medium';
+  if (score >= 70) return 'high';
+  if (score >= 40) return 'medium';
   return 'low';
 }
 
@@ -1442,29 +1461,44 @@ async function feedTriggerFetch(btnEl) {
 function feedCardHtml(item) {
   const icon = getFeedIcon(item);
   const relevanceBarClass = getRelevanceClass(item.relevance_score);
-  const pct = Math.min(item.relevance_score * 10, 100);
+  const pct = Math.min(item.relevance_score, 100);
   const timeAgo = formatTimeAgo(item.created_at);
+
+  // Source row — only show if source_name is explicitly set (not category)
+  const sourceName = item.source_name || '';
+  const sourceRow = sourceName
+    ? '<div class="feed-card-source">' +
+        (item.source_url
+          ? '<a href="' + escapeHtml(item.source_url) + '" target="_blank" onclick="event.stopPropagation()">' + icon + ' ' + escapeHtml(sourceName) + ' ↗</a>'
+          : icon + ' ' + escapeHtml(sourceName)) +
+      '</div>'
+    : '';
+
+  // Make title a clickable link if source_url exists
+  const titleHtml = item.source_url
+    ? '<a href="' + escapeHtml(item.source_url) + '" target="_blank" style="color:inherit;text-decoration:none;" onclick="event.stopPropagation()">' + escapeHtml(item.one_liner) + '</a>'
+    : escapeHtml(item.one_liner);
+
   const tag = item.category ? '<span class="feed-card-tag">' + escapeHtml(item.category) + '</span>' : '';
-  const priorityTag = item.priority_level >= 70 ? '<span class="feed-card-tag" style="opacity:0.8;color:var(--accent-orange)">high</span>' :
-    item.priority_level >= 40 ? '<span class="feed-card-tag">medium</span>' : '';
-  const linkBtn = item.source_url ? '<button class="feed-card-action link" onclick="window.open(\'' + escapeHtml(item.source_url) + '\',\'_blank\')" title="Open link">🔗</button>' : '';
+  const priorityTag = item.priority_level >= 5 ? '<span class="feed-card-tag" style="opacity:0.8;color:var(--accent-orange)">high</span>' :
+    item.priority_level >= 3 ? '<span class="feed-card-tag">medium</span>' : '';
+
   return '<div class="feed-card" data-id="' + item.id + '">' +
+    sourceRow +
     '<div class="feed-card-header">' +
-      '<span class="feed-card-icon">' + icon + '</span>' +
       '<div class="feed-card-body">' +
-        '<div class="feed-card-title">' + escapeHtml(item.one_liner) + '</div>' +
+        '<div class="feed-card-title">' + titleHtml + '</div>' +
         '<div class="feed-card-meta">' +
-          (item.source_name ? '<span style="font-size:0.6rem;opacity:0.35;">' + escapeHtml(item.source_name) + '</span>' : '') +
           tag + priorityTag +
           '<span class="feed-card-relevance">' +
             '<span class="feed-card-relevance-bar"><span class="feed-card-relevance-fill ' + relevanceBarClass + '" style="width:' + pct + '%"></span></span>' +
-            item.relevance_score.toFixed(1) +
+            item.relevance_score.toFixed(0) +
           '</span>' +
-          '<span style="font-size:0.6rem;opacity:0.25;">' + timeAgo + '</span>' +
+          '<span style="font-size:0.6rem;opacity:0.35;">' + timeAgo + '</span>' +
         '</div>' +
       '</div>' +
       '<div class="feed-card-actions">' +
-        linkBtn +
+        (item.source_url ? '<button class="feed-card-action link" onclick="window.open(\'' + escapeHtml(item.source_url) + '\',\'_blank\')" title="Open link">🔗</button>' : '') +
         '<button class="feed-card-action dismiss" onclick="feedDismiss(' + item.id + ', this.closest(\'.feed-card\'))" title="Dismiss">✕</button>' +
       '</div>' +
     '</div>' +
@@ -1800,6 +1834,20 @@ async function captureThoughtKb() {
   try { var r = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:inp.value.trim()})}); if(r.ok){inp.value='';showToast('Tamed!');renderKanbanContent();} else {showToast('AI failed');} } catch(e) { showToast('Failed'); }
 }
 
+async function createGoalQuick() {
+  const title = prompt('Goal title?');
+  if (!title || !title.trim()) return;
+  try {
+    const res = await fetch('/api/goals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title.trim() })
+    });
+    if (res.ok) { showToast('Goal created!'); PanelSystem.refreshPanel('goals'); PanelSystem.refreshPanel('kanban'); }
+    else { showToast('Failed to create goal'); }
+  } catch(e) { showToast('Failed to create goal'); }
+}
+
 /* ═══════════════════════════════════════════════════════════
    PANEL: GOALS (zone-bl) — THE FIX FOR TODAY'S PROBLEM
    ═══════════════════════════════════════════════════════════ */
@@ -1808,13 +1856,15 @@ PanelSystem.register('goals', {
   render: async function(container) {
     const data = await fetchGoals();
     if (!data || !data.goals || data.goals.length === 0) {
-      container.innerHTML = '<div class="empty-state">No goals yet!<br><br>Create one from the Kanban tab or click "+ Goal" in the Stats column.</div>';
+      container.innerHTML = '<div class="empty-state">No goals yet!</div>' +
+        '<div style="margin-top:8px;text-align:center;"><button class="btn btn-sm" onclick="createGoalQuick()">+ New Goal</button></div>';
       return;
     }
 
     const goals = data.goals.filter(g => !g.archived);
     if (goals.length === 0) {
-      container.innerHTML = '<div class="empty-state">All goals archived. Create a new one!</div>';
+      container.innerHTML = '<div class="empty-state">All goals archived.</div>' +
+        '<div style="margin-top:8px;text-align:center;"><button class="btn btn-sm" onclick="createGoalQuick()">+ New Goal</button></div>';
       return;
     }
 
@@ -1846,7 +1896,7 @@ PanelSystem.register('goals', {
       '</div>';
     }).join('') +
     '<div style="margin-top:8px;text-align:center;">' +
-      '<button class="btn btn-sm" onclick="PanelSystem.activatePanel(\'bl\',\'goals\');showToast(\'Create a goal from the Kanban + Task button\')">+ New Goal</button>' +
+      '<button class="btn btn-sm" onclick="createGoalQuick()">+ New Goal</button>' +
     '</div>';
   }
 });

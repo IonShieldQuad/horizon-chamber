@@ -10,6 +10,8 @@ Usage:
     python desktop_app.py --debug      # verbose logs
 """
 
+from __future__ import annotations
+
 import argparse
 import logging
 import os

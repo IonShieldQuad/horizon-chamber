@@ -4,6 +4,8 @@ Follows the scheduler.py pattern: runs as an asyncio background loop,
 manages in-memory state for cooldowns, and persists data via db.py.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -171,7 +173,7 @@ async def ingest_payload(payload: dict) -> dict:
             one_liner=str(item.get("one_liner", "")),
             relevance_score=float(item.get("relevance_score", 0.0)),
             is_relevant=bool(item.get("is_relevant", False)),
-            priority_level=int(item.get("priority_level", 50)),
+            priority_level=int(item.get("priority_level", 1)),
             category=str(item.get("category", "")),
             sentiment_tone=str(item.get("sentiment_tone", "neutral")),
             source_url=str(item.get("source_url", "")),

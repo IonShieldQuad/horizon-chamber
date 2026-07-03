@@ -13,6 +13,8 @@ Public API:
     get_focus_summary(period="today") -> list[dict]
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os

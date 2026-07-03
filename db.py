@@ -8,6 +8,8 @@ Schema version history:
   version 5 — feed_items, feed_runs tables for n8n feed aggregation
 """
 
+from __future__ import annotations
+
 import os
 from datetime import datetime
 from typing import Optional
@@ -118,7 +120,7 @@ CREATE TABLE IF NOT EXISTS feed_items (
     original_id TEXT NOT NULL UNIQUE,
     relevance_score REAL DEFAULT 0.0,
     is_relevant INTEGER DEFAULT 0,
-    priority_level INTEGER DEFAULT 50,
+    priority_level INTEGER DEFAULT 3,
     category TEXT DEFAULT '',
     one_liner TEXT NOT NULL,
     sentiment_tone TEXT DEFAULT 'neutral',
@@ -487,7 +489,7 @@ async def insert_goal(
         await db.close()
 
 
-INBOX_GOAL_ID: int | None = None
+INBOX_GOAL_ID: Optional[int] = None
 
 
 async def get_or_create_inbox_goal() -> int:
@@ -853,7 +855,7 @@ async def insert_feed_item(
     one_liner: str,
     relevance_score: float = 0.0,
     is_relevant: bool = False,
-    priority_level: int = 50,
+    priority_level: int = 3,
     category: str = "",
     sentiment_tone: str = "neutral",
     source_url: str = "",

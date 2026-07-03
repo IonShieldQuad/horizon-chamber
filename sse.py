@@ -4,6 +4,8 @@ Provides helpers for formatting SSE events and wrapping async generators
 as StreamingResponse instances.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 from typing import Any, AsyncIterator, Union

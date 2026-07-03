@@ -1,5 +1,7 @@
 """Horizon Chamber — FastAPI application entry point."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
@@ -188,9 +190,9 @@ class CreateTaskRequest(BaseModel):
 
 class FeedProcessedItem(BaseModel):
     original_id: str = Field(..., description="Unique ID from the source")
-    relevance_score: float = Field(0.0, ge=0.0, le=10.0)
+    relevance_score: float = Field(0.0, ge=0.0, le=100.0)
     is_relevant: bool = False
-    priority_level: int = Field(50, ge=0, le=100)
+    priority_level: int = Field(3, ge=1, le=5)
     category: str = ""
     one_liner: str = Field(..., min_length=1)
     sentiment_tone: str = "neutral"
